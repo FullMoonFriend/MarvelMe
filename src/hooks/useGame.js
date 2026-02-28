@@ -36,6 +36,50 @@ function shuffle(arr) {
 }
 
 /**
+ * Linear Congruential Generator — returns a PRNG seeded with `seed`.
+ * Yields values in [0, 1) deterministically for a given seed.
+ *
+ * @param {number} seed
+ * @returns {() => number}
+ */
+function makePrng(seed) {
+  let s = seed >>> 0
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) | 0
+    return (s >>> 0) / 0x100000000
+  }
+}
+
+/**
+ * Deterministically shuffles `arr` using a seeded PRNG (Fisher-Yates).
+ *
+ * @template T
+ * @param {T[]} arr
+ * @param {number} seed
+ * @returns {T[]}
+ */
+function seededShuffle(arr, seed) {
+  const rand = makePrng(seed)
+  const out = [...arr]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
+/**
+ * Returns a numeric seed derived from today's local date (YYYYMMDD).
+ * All players on the same calendar day get the same seed.
+ *
+ * @returns {number}
+ */
+function getDailySeed() {
+  const d = new Date()
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()
+}
+
+/**
  * Fetches hero data for one round.
  *
  * `correctIndex` pins which pool entry is the answer, preventing the same hero
@@ -95,6 +139,7 @@ export function useGame() {
     streak: 0,
     maxStreak: 0,
     history: [],
+    isDailyChallenge: false,
   })
 
   /** Shuffled hero name pool for the current game session. */
@@ -128,15 +173,21 @@ export function useGame() {
    * round, and immediately prefetches the second. Falls back to 'welcome' phase
    * on error.
    *
-   * @param {string|null} category - Hero category filter ('hero' | 'xmen' | 'villain' | null for all).
+   * When `daily` is true the pool is shuffled with today's date seed so every
+   * player faces the same sequence of heroes on a given calendar day.
+   *
+   * @param {string|null} category - Hero category filter ('hero' | 'xmen' | 'villain' | null for all). Ignored when `daily` is true.
+   * @param {{ daily?: boolean }} [options]
    */
-  const startGame = useCallback(async (category) => {
+  const startGame = useCallback(async (category, { daily = false } = {}) => {
     setState(s => ({ ...s, phase: 'loading' }))
     try {
-      const filtered = category
+      const filtered = (!daily && category)
         ? MARVEL_HEROES.filter(h => h.category === category)
         : MARVEL_HEROES
-      const pool = shuffle(filtered).map(h => h.name)
+      const pool = daily
+        ? seededShuffle(filtered, getDailySeed()).map(h => h.name)
+        : shuffle(filtered).map(h => h.name)
       poolRef.current = pool
       const { hero, options } = await loadRound(pool, 0)
       setState({
@@ -150,6 +201,7 @@ export function useGame() {
         streak: 0,
         maxStreak: 0,
         history: [],
+        isDailyChallenge: daily,
       })
       doPrefetch(pool, 1)
     } catch {
@@ -254,6 +306,7 @@ export function useGame() {
       streak: 0,
       maxStreak: 0,
       history: [],
+      isDailyChallenge: false,
     })
   }, [])
 

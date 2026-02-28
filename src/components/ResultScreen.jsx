@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { ROUNDS } from '../hooks/useGame'
+import { useHighScore } from '../hooks/useHighScore'
 
 const MAX_SCORE = ROUNDS * 3 // 30
 
@@ -11,8 +13,23 @@ function getGrade(score) {
   return { letter: 'D', label: 'RECRUIT', color: 'text-gray-400' }
 }
 
-export default function ResultScreen({ score, onRestart }) {
+export default function ResultScreen({ score, streak, history, onRestart }) {
+  const { bestScore, bestStreak, update } = useHighScore()
+  const [copied, setCopied] = useState(false)
   const grade = getGrade(score)
+
+  useEffect(() => {
+    update(score, streak)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleShare() {
+    const emoji = history.map(h => h.correct ? '✅' : '❌').join('')
+    const text = `MarvelMe — ${grade.label} (${grade.letter}) 🦸\nScore: ${score}/${MAX_SCORE} | Streak: ${streak}🔥\n${emoji}`
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f0f0f] px-4">
@@ -48,11 +65,26 @@ export default function ResultScreen({ score, onRestart }) {
             />
           ))}
         </div>
+
+        {/* Personal bests */}
+        <p className="mt-5 pt-4 border-t border-[#2a2a2a] text-gray-400 text-xs">
+          Best Score: <span className="text-[#f5c518]">{bestScore}</span> &nbsp;|&nbsp; Best Streak: <span className="text-orange-400">{bestStreak}🔥</span>
+        </p>
       </div>
+
+      {/* Share button */}
+      <button
+        onClick={handleShare}
+        className="mt-4 font-bangers text-lg tracking-widest px-8 py-3 rounded-xl
+          border-2 border-[#2a2a2a] text-gray-300 hover:border-[#f5c518] hover:text-[#f5c518]
+          active:scale-95 transition-all duration-150"
+      >
+        {copied ? '✓ COPIED!' : '📋 SHARE RESULT'}
+      </button>
 
       <button
         onClick={onRestart}
-        className="mt-8 font-bangers text-3xl tracking-widest px-12 py-4 rounded-xl
+        className="mt-3 font-bangers text-3xl tracking-widest px-12 py-4 rounded-xl
           bg-[#ed1d24] hover:bg-[#ff2d35] active:scale-95
           text-white shadow-[0_0_20px_rgba(237,29,36,0.5)]
           transition-all duration-150"

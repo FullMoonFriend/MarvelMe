@@ -15,44 +15,66 @@ function PowerBar({ label, value }) {
 }
 
 export default function HintPanel({ hero, hintsUsed }) {
-  if (hintsUsed === 0) return null
-
   const bio = hero.biography ?? {}
   const stats = hero.powerstats ?? {}
+  const work = hero.work ?? {}
+  const appearance = hero.appearance ?? {}
 
   return (
-    <div className="w-full max-w-sm mx-auto mt-4 space-y-3 animate-fadeIn">
-      {/* Hint 1: First appearance + publisher */}
+    <div className="w-full max-w-sm mx-auto mt-4 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 space-y-4">
+      <p className="text-[#ed1d24] font-bangers text-sm tracking-wider">MYSTERY CHARACTER</p>
+
+      {/* Always visible: first appearance + powerstats */}
+      <div className="space-y-1">
+        <p className="text-xs text-gray-500">
+          First appearance:{' '}
+          <span className="text-gray-200">{bio['first-appearance'] || '—'}</span>
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {['intelligence', 'strength', 'speed', 'durability', 'power', 'combat'].map(k => (
+          <PowerBar key={k} label={k} value={stats[k]} />
+        ))}
+      </div>
+
+      {/* Hint 1: Occupation + base */}
       {hintsUsed >= 1 && (
-        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 animate-fadeIn">
-          <p className="text-[#ed1d24] font-bangers text-sm tracking-wider mb-2">HINT 1 — ORIGIN</p>
-          <p className="text-sm text-gray-300">
-            <span className="text-gray-500">Publisher: </span>
-            <span className="text-white">{bio.publisher || '—'}</span>
+        <div className="pt-2 border-t border-[#2a2a2a] animate-fadeIn">
+          <p className="text-[#f5c518] font-bangers text-xs tracking-wider mb-1">HINT 1 — OCCUPATION</p>
+          <p className="text-xs text-gray-300">
+            <span className="text-gray-500">Occupation: </span>
+            <span className="text-white">{work.occupation || '—'}</span>
           </p>
-          <p className="text-sm text-gray-300 mt-1">
-            <span className="text-gray-500">First appearance: </span>
-            <span className="text-white">{bio['first-appearance'] || '—'}</span>
+          <p className="text-xs text-gray-300 mt-0.5">
+            <span className="text-gray-500">Base: </span>
+            <span className="text-white">{work.base || '—'}</span>
           </p>
         </div>
       )}
 
-      {/* Hint 2: Power stats */}
+      {/* Hint 2: Physical description */}
       {hintsUsed >= 2 && (
-        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 animate-fadeIn">
-          <p className="text-[#ed1d24] font-bangers text-sm tracking-wider mb-3">HINT 2 — POWERSTATS</p>
-          <div className="space-y-2">
-            {['intelligence', 'strength', 'speed', 'power', 'combat'].map(k => (
-              <PowerBar key={k} label={k} value={stats[k]} />
-            ))}
-          </div>
+        <div className="pt-2 border-t border-[#2a2a2a] animate-fadeIn">
+          <p className="text-[#f5c518] font-bangers text-xs tracking-wider mb-1">HINT 2 — APPEARANCE</p>
+          <p className="text-xs text-gray-300">
+            {[
+              appearance.height?.[0],
+              appearance['hair-color'],
+              appearance['eye-color'],
+              appearance.race,
+              appearance.gender,
+            ]
+              .filter(v => v && v !== 'null' && v !== '-')
+              .join(' · ') || '—'}
+          </p>
         </div>
       )}
 
       {/* Hint 3: Real name */}
       {hintsUsed >= 3 && (
-        <div className="bg-[#1a1a1a] border border-[#ed1d24]/40 rounded-xl p-4 animate-fadeIn">
-          <p className="text-[#ed1d24] font-bangers text-sm tracking-wider mb-2">HINT 3 — REAL NAME</p>
+        <div className="pt-2 border-t border-[#ed1d24]/40 animate-fadeIn">
+          <p className="text-[#f5c518] font-bangers text-xs tracking-wider mb-1">HINT 3 — REAL NAME</p>
           <p className="text-white text-base font-semibold">
             {bio['full-name'] || bio['alter-egos'] || '—'}
           </p>

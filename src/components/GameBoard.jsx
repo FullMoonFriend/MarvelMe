@@ -1,13 +1,14 @@
 import ScoreBar from './ScoreBar'
-import HeroImage from './HeroImage'
 import HintPanel from './HintPanel'
 import AnswerOptions from './AnswerOptions'
+import { playHint, playGameOver } from '../services/sounds'
 
-export default function GameBoard({ game }) {
+export default function GameBoard({ game, muted, onToggleMute }) {
   const {
     phase,
     round,
     score,
+    streak,
     currentHero,
     options,
     hintsUsed,
@@ -22,12 +23,10 @@ export default function GameBoard({ game }) {
   const isRevealed = phase === 'revealed'
   const canHint = phase === 'playing' && hintsUsed < 3
 
-  const pointsAvailable = [3, 2, 1, 0][Math.min(hintsUsed, 3)]
-
   if (isLoading || !currentHero) {
     return (
       <div className="min-h-screen flex flex-col bg-[#0f0f0f]">
-        <ScoreBar round={round || 1} score={score} ROUNDS={ROUNDS} />
+        <ScoreBar round={round || 1} score={score} ROUNDS={ROUNDS} streak={streak} muted={muted} onToggleMute={onToggleMute} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-12 h-12 border-4 border-[#ed1d24] border-t-transparent rounded-full animate-spin mx-auto" />
@@ -40,9 +39,9 @@ export default function GameBoard({ game }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0f0f0f]">
-      <ScoreBar round={round} score={score} ROUNDS={ROUNDS} />
+      <ScoreBar round={round} score={score} ROUNDS={ROUNDS} streak={streak} muted={muted} onToggleMute={onToggleMute} />
 
-      <main className="flex-1 flex flex-col items-center px-4 pt-6 pb-10">
+      <main key={round} className="flex-1 flex flex-col items-center px-4 pt-6 pb-10 animate-fadeIn">
         {/* Points indicator */}
         <div className="mb-4 flex items-center gap-2">
           <span className="text-gray-500 text-xs">Potential points:</span>
@@ -65,8 +64,8 @@ export default function GameBoard({ game }) {
           </div>
         </div>
 
-        {/* Hero image */}
-        <HeroImage hero={currentHero} hintsUsed={hintsUsed} revealed={isRevealed} />
+        {/* Hint panel — always visible */}
+        <HintPanel hero={currentHero} hintsUsed={hintsUsed} />
 
         {/* Reveal result banner */}
         {isRevealed && (
@@ -83,9 +82,6 @@ export default function GameBoard({ game }) {
           </div>
         )}
 
-        {/* Hint panel */}
-        <HintPanel hero={currentHero} hintsUsed={hintsUsed} />
-
         {/* Answer options */}
         <AnswerOptions
           options={options}
@@ -99,7 +95,7 @@ export default function GameBoard({ game }) {
         <div className="mt-6 flex gap-3">
           {!isRevealed && (
             <button
-              onClick={useHint}
+              onClick={() => { playHint(); useHint() }}
               disabled={!canHint}
               className={`font-bangers text-lg tracking-wider px-6 py-3 rounded-xl border-2 transition-all duration-150
                 ${canHint
@@ -114,7 +110,10 @@ export default function GameBoard({ game }) {
 
           {isRevealed && (
             <button
-              onClick={() => nextRound(round, score)}
+              onClick={() => {
+                if (round >= ROUNDS) playGameOver()
+                nextRound(round, score)
+              }}
               className="font-bangers text-2xl tracking-widest px-10 py-3 rounded-xl
                 bg-[#ed1d24] hover:bg-[#ff2d35] active:scale-95
                 text-white shadow-[0_0_16px_rgba(237,29,36,0.4)]

@@ -9,14 +9,19 @@ function shuffle(arr) {
   return [...arr].sort(() => Math.random() - 0.5)
 }
 
-async function loadRound(pool) {
-  const names = shuffle(pool).slice(0, 4)
-  const results = await Promise.all(names.map(n => searchHero(n).catch(() => null)))
-  const valid = results.filter(Boolean)
-  if (valid.length < 2) throw new Error('Not enough heroes loaded')
-
-  const correct = valid[Math.floor(Math.random() * valid.length)]
-  return { hero: correct, options: shuffle(valid.map(h => h.name)) }
+// correctIndex pins which pool entry is the answer, preventing repeats across rounds.
+// Wrong options are sampled randomly from the rest of the pool.
+async function loadRound(pool, correctIndex) {
+  const correctName = pool[correctIndex]
+  // Fetch 6 wrong candidates so failed API calls don't leave us short
+  const wrongCandidates = shuffle(pool.filter((_, i) => i !== correctIndex)).slice(0, 6)
+  const [correctHero, ...wrongResults] = await Promise.all(
+    [correctName, ...wrongCandidates].map(n => searchHero(n).catch(() => null))
+  )
+  if (!correctHero) throw new Error('Could not load correct hero')
+  const validWrong = wrongResults.filter(Boolean).slice(0, 3)
+  if (validWrong.length < 1) throw new Error('Not enough heroes loaded')
+  return { hero: correctHero, options: shuffle([correctHero, ...validWrong].map(h => ({ name: h.name, image: h.image }))) }
 }
 
 export function useGame() {
@@ -28,21 +33,29 @@ export function useGame() {
     options: [],
     hintsUsed: 0,
     result: null, // 'correct' | 'wrong'
+    streak: 0,
+    maxStreak: 0,
+    history: [],
   })
 
   const poolRef = useRef([])
   const prefetchRef = useRef(null)
 
-  function doPrefetch(pool) {
-    prefetchRef.current = loadRound(pool).catch(() => null)
+  function doPrefetch(pool, index) {
+    if (index < pool.length) {
+      prefetchRef.current = loadRound(pool, index).catch(() => null)
+    }
   }
 
-  const startGame = useCallback(async () => {
+  const startGame = useCallback(async (category) => {
     setState(s => ({ ...s, phase: 'loading' }))
     try {
-      const pool = shuffle(MARVEL_HEROES)
+      const filtered = category
+        ? MARVEL_HEROES.filter(h => h.category === category)
+        : MARVEL_HEROES
+      const pool = shuffle(filtered).map(h => h.name)
       poolRef.current = pool
-      const { hero, options } = await loadRound(pool)
+      const { hero, options } = await loadRound(pool, 0)
       setState({
         phase: 'playing',
         round: 1,
@@ -51,8 +64,11 @@ export function useGame() {
         options,
         hintsUsed: 0,
         result: null,
+        streak: 0,
+        maxStreak: 0,
+        history: [],
       })
-      doPrefetch(pool)
+      doPrefetch(pool, 1)
     } catch {
       setState(s => ({ ...s, phase: 'welcome' }))
     }
@@ -69,11 +85,15 @@ export function useGame() {
     setState(s => {
       if (s.phase !== 'playing') return s
       const correct = name === s.currentHero.name
+      const newStreak = correct ? s.streak + 1 : 0
       return {
         ...s,
         phase: 'revealed',
         result: correct ? 'correct' : 'wrong',
         score: s.score + (correct ? POINTS[s.hintsUsed] : 0),
+        streak: newStreak,
+        maxStreak: Math.max(s.maxStreak, newStreak),
+        history: [...s.history, { correct, hintsUsed: s.hintsUsed }],
       }
     })
   }, [])
@@ -88,11 +108,14 @@ export function useGame() {
     setState(s => ({ ...s, phase: 'loading' }))
 
     try {
+      // currentRound is 1-indexed; the next round's pool index equals currentRound
+      const nextIndex = currentRound
       const pending = prefetchRef.current
       prefetchRef.current = null
-      const roundData = (pending ? await pending : null) ?? await loadRound(poolRef.current)
+      const roundData = (pending ? await pending : null) ?? await loadRound(poolRef.current, nextIndex)
 
-      setState({
+      setState(s => ({
+        ...s,
         phase: 'playing',
         round: currentRound + 1,
         score: currentScore,
@@ -100,8 +123,8 @@ export function useGame() {
         options: roundData.options,
         hintsUsed: 0,
         result: null,
-      })
-      doPrefetch(poolRef.current)
+      }))
+      doPrefetch(poolRef.current, nextIndex + 1)
     } catch {
       setState(s => ({ ...s, phase: 'welcome' }))
     }
@@ -118,6 +141,9 @@ export function useGame() {
       options: [],
       hintsUsed: 0,
       result: null,
+      streak: 0,
+      maxStreak: 0,
+      history: [],
     })
   }, [])
 

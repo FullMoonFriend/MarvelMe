@@ -1,4 +1,4 @@
-export default function ScoreBar({ round, score, ROUNDS }) {
+export default function ScoreBar({ round, score, ROUNDS, streak, muted, onToggleMute }) {
   const progress = ((round - 1) / ROUNDS) * 100
 
   return (
@@ -22,10 +22,24 @@ export default function ScoreBar({ round, score, ROUNDS }) {
           </div>
         </div>
 
-        {/* Score */}
-        <div className="text-right">
-          <span className="text-xs text-gray-400">Score</span>
-          <div className="font-bangers text-2xl text-[#f5c518] leading-none">{score}</div>
+        {/* Score + streak + mute */}
+        <div className="flex items-center gap-2">
+          {streak >= 2 && (
+            <span className="font-bangers text-lg text-orange-400 leading-none">
+              🔥{streak}
+            </span>
+          )}
+          <div className="text-right">
+            <span className="text-xs text-gray-400">Score</span>
+            <div className="font-bangers text-2xl text-[#f5c518] leading-none">{score}</div>
+          </div>
+          <button
+            onClick={onToggleMute}
+            className="text-xl text-gray-400 hover:text-white transition-colors ml-1"
+            aria-label={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? '🔇' : '🔊'}
+          </button>
         </div>
       </div>
     </div>

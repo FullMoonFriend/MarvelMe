@@ -1,4 +1,15 @@
+import { useState } from 'react'
+
+const CATEGORIES = [
+  { id: null, label: 'All' },
+  { id: 'hero', label: 'Heroes' },
+  { id: 'xmen', label: 'X-Men' },
+  { id: 'villain', label: 'Villains' },
+]
+
 export default function WelcomeScreen({ onStart }) {
+  const [category, setCategory] = useState(null)
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f0f0f] px-4">
       {/* Logo / Title */}
@@ -17,19 +28,19 @@ export default function WelcomeScreen({ onStart }) {
         <ul className="space-y-3 text-sm text-gray-300">
           <li className="flex items-start gap-3">
             <span className="text-[#ed1d24] text-lg mt-0.5">①</span>
-            <span>A blurred hero image is shown with <strong className="text-white">4 name choices</strong>.</span>
+            <span>A mystery character's <strong className="text-white">power stats</strong> and <strong className="text-white">first appearance</strong> are shown.</span>
           </li>
           <li className="flex items-start gap-3">
             <span className="text-[#ed1d24] text-lg mt-0.5">②</span>
-            <span>Use up to <strong className="text-white">3 hints</strong> to reveal clues — but each hint costs you a point.</span>
+            <span>Use up to <strong className="text-white">3 hints</strong> to reveal occupation, appearance, and real name — each costs 1 pt.</span>
           </li>
           <li className="flex items-start gap-3">
             <span className="text-[#ed1d24] text-lg mt-0.5">③</span>
-            <span>Score <strong className="text-[#f5c518]">3 pts</strong> with no hints · <strong className="text-[#f5c518]">2 pts</strong> · <strong className="text-[#f5c518]">1 pt</strong> · <strong className="text-gray-400">0 pts</strong></span>
+            <span>Score <strong className="text-[#f5c518]">3 pts</strong> no hints · <strong className="text-[#f5c518]">2 pts</strong> · <strong className="text-[#f5c518]">1 pt</strong> · <strong className="text-gray-400">0 pts</strong></span>
           </li>
           <li className="flex items-start gap-3">
             <span className="text-[#ed1d24] text-lg mt-0.5">④</span>
-            <span>Complete <strong className="text-white">10 rounds</strong> then see your final grade!</span>
+            <span>Pick which of the <strong className="text-white">4 character portraits</strong> matches the clues. Complete <strong className="text-white">10 rounds</strong>!</span>
           </li>
         </ul>
 
@@ -37,11 +48,11 @@ export default function WelcomeScreen({ onStart }) {
         <div className="mt-5 pt-4 border-t border-[#2a2a2a] grid grid-cols-3 gap-2 text-xs text-center text-gray-400">
           <div>
             <div className="text-[#ed1d24] font-semibold mb-1">Hint 1</div>
-            First appearance &amp; publisher
+            Occupation &amp; base
           </div>
           <div>
             <div className="text-[#ed1d24] font-semibold mb-1">Hint 2</div>
-            Power stats chart
+            Physical description
           </div>
           <div>
             <div className="text-[#ed1d24] font-semibold mb-1">Hint 3</div>
@@ -50,9 +61,26 @@ export default function WelcomeScreen({ onStart }) {
         </div>
       </div>
 
+      {/* Category selector */}
+      <div className="mt-6 flex gap-2">
+        {CATEGORIES.map(c => (
+          <button
+            key={String(c.id)}
+            onClick={() => setCategory(c.id)}
+            className={`font-bangers tracking-wider px-4 py-2 rounded-full text-sm border-2 transition-all duration-150
+              ${category === c.id
+                ? 'bg-[#ed1d24] border-[#ed1d24] text-white'
+                : 'border-[#2a2a2a] text-gray-400 hover:border-[#ed1d24] hover:text-white'
+              }`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
       <button
-        onClick={onStart}
-        className="mt-8 font-bangers text-3xl tracking-widest px-12 py-4 rounded-xl
+        onClick={() => onStart(category)}
+        className="mt-6 font-bangers text-3xl tracking-widest px-12 py-4 rounded-xl
           bg-[#ed1d24] hover:bg-[#ff2d35] active:scale-95
           text-white shadow-[0_0_20px_rgba(237,29,36,0.5)]
           transition-all duration-150"

@@ -3,6 +3,23 @@ import HintPanel from './HintPanel'
 import AnswerOptions from './AnswerOptions'
 import { playHint, playGameOver } from '../services/sounds'
 
+/**
+ * Main game screen rendered during the 'loading', 'playing', and 'revealed' phases.
+ *
+ * Renders a loading spinner while hero data is being fetched, then switches to
+ * the full game layout containing:
+ * - ScoreBar (always visible)
+ * - Points-remaining indicator
+ * - HintPanel (clues + optional hints)
+ * - Result banner (shown after the player answers)
+ * - AnswerOptions (the 4 portrait buttons)
+ * - Hint button or Next-round button
+ *
+ * @param {object}   props
+ * @param {object}   props.game          - Full state + actions object from `useGame`.
+ * @param {boolean}  props.muted         - Whether sound effects are muted.
+ * @param {() => void} props.onToggleMute - Callback to toggle the mute state.
+ */
 export default function GameBoard({ game, muted, onToggleMute }) {
   const {
     phase,

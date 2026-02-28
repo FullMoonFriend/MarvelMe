@@ -1,3 +1,10 @@
+/**
+ * Displays a single power-stat row with a labelled progress bar.
+ *
+ * @param {object} props
+ * @param {string} props.label - Stat name (e.g. "intelligence").
+ * @param {number|string} props.value - Raw stat value from the API (0–100).
+ */
 function PowerBar({ label, value }) {
   const pct = Math.max(0, Math.min(100, Number(value) || 0))
   return (
@@ -14,6 +21,22 @@ function PowerBar({ label, value }) {
   )
 }
 
+/**
+ * Displays the mystery hero's clues, progressively revealing more information
+ * as the player uses hints.
+ *
+ * Always shown:
+ *  - First appearance date
+ *  - All six power-stat bars
+ *
+ * Hint 1 (hintsUsed >= 1): Occupation and base of operations.
+ * Hint 2 (hintsUsed >= 2): Physical description (height, hair/eye colour, race, gender).
+ * Hint 3 (hintsUsed >= 3): Real / full name.
+ *
+ * @param {object} props
+ * @param {object} props.hero      - Hero object returned by the Superhero API.
+ * @param {number} props.hintsUsed - Number of hints the player has used (0–3).
+ */
 export default function HintPanel({ hero, hintsUsed }) {
   const bio = hero.biography ?? {}
   const stats = hero.powerstats ?? {}

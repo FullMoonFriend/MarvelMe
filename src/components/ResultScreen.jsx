@@ -2,8 +2,22 @@ import { useEffect, useState } from 'react'
 import { ROUNDS } from '../hooks/useGame'
 import { useHighScore } from '../hooks/useHighScore'
 
+/** Maximum achievable score: 3 pts × 10 rounds. */
 const MAX_SCORE = ROUNDS * 3 // 30
 
+/**
+ * Maps a final score to a letter grade and display label.
+ *
+ * Thresholds (as percentage of MAX_SCORE):
+ * - S (≥90%): LEGENDARY
+ * - A (≥75%): HEROIC
+ * - B (≥55%): WORTHY
+ * - C (≥35%): IN TRAINING
+ * - D (<35%):  RECRUIT
+ *
+ * @param {number} score - The player's final score.
+ * @returns {{ letter: string, label: string, color: string }} Grade data including Tailwind colour class.
+ */
 function getGrade(score) {
   const pct = score / MAX_SCORE
   if (pct >= 0.9) return { letter: 'S', label: 'LEGENDARY', color: 'text-[#f5c518]' }
@@ -13,6 +27,22 @@ function getGrade(score) {
   return { letter: 'D', label: 'RECRUIT', color: 'text-gray-400' }
 }
 
+/**
+ * End-of-game screen shown in the 'gameover' phase.
+ *
+ * Displays the player's grade, final score out of MAX_SCORE, a dot
+ * visualisation of the score, personal-best records, a share button that
+ * copies a results summary to the clipboard, and a Play Again button.
+ *
+ * Calls `useHighScore().update` once on mount to persist new records.
+ *
+ * @param {object}   props
+ * @param {number}   props.score   - Final score for the completed game.
+ * @param {number}   props.streak  - Longest streak achieved (passed as maxStreak).
+ * @param {Array<{correct: boolean, hintsUsed: number}>} props.history
+ *   Per-round result history used to build the emoji share string.
+ * @param {() => void} props.onRestart - Callback to return to the welcome screen.
+ */
 export default function ResultScreen({ score, streak, history, onRestart }) {
   const { bestScore, bestStreak, update } = useHighScore()
   const [copied, setCopied] = useState(false)
@@ -22,6 +52,10 @@ export default function ResultScreen({ score, streak, history, onRestart }) {
     update(score, streak)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Builds a shareable text summary and copies it to the clipboard.
+   * Shows a brief "COPIED!" confirmation in the button label.
+   */
   function handleShare() {
     const emoji = history.map(h => h.correct ? '✅' : '❌').join('')
     const text = `MarvelMe — ${grade.label} (${grade.letter}) 🦸\nScore: ${score}/${MAX_SCORE} | Streak: ${streak}🔥\n${emoji}`

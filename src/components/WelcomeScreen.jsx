@@ -1,5 +1,11 @@
 import { useState } from 'react'
 
+/**
+ * Available hero categories the player can filter by.
+ * `id: null` means no filter — all heroes are included.
+ *
+ * @type {Array<{id: string|null, label: string}>}
+ */
 const CATEGORIES = [
   { id: null, label: 'All' },
   { id: 'hero', label: 'Heroes' },
@@ -7,6 +13,16 @@ const CATEGORIES = [
   { id: 'villain', label: 'Villains' },
 ]
 
+/**
+ * Landing / start screen shown in the 'welcome' game phase.
+ *
+ * Displays the game logo, a "How to Play" rules card with a hint legend,
+ * a category selector, and a Start Game button.
+ *
+ * @param {object}   props
+ * @param {(category: string|null) => void} props.onStart
+ *   Called with the selected category (or null for all) when the player starts.
+ */
 export default function WelcomeScreen({ onStart }) {
   const [category, setCategory] = useState(null)
 

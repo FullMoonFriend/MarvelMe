@@ -31,7 +31,7 @@ export default function App() {
   }
 
   if (game.phase === 'welcome') {
-    return <WelcomeScreen onStart={game.startGame} />
+    return <WelcomeScreen onStart={game.startGame} onStartDaily={game.startDailyGame} />
   }
 
   if (game.phase === 'gameover') {
@@ -40,6 +40,7 @@ export default function App() {
         score={game.score}
         streak={game.maxStreak}
         history={game.history}
+        isDaily={game.isDaily}
         onRestart={game.restartGame}
       />
     )

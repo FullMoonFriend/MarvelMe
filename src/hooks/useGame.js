@@ -12,6 +12,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { MARVEL_HEROES } from '../data/marvelHeroes'
 import { searchHero } from '../services/superheroApi'
+import { seededShuffle, todayKey } from '../utils/daily'
 
 /** Total number of rounds per game. */
 export const ROUNDS = 10
@@ -75,8 +76,10 @@ async function loadRound(pool, correctIndex) {
  *   streak: number,
  *   maxStreak: number,
  *   history: Array<{correct: boolean, hintsUsed: number}>,
+ *   isDaily: boolean,
  *   ROUNDS: number,
  *   startGame: (category: string|null) => Promise<void>,
+ *   startDailyGame: () => Promise<void>,
  *   useHint: () => void,
  *   submitAnswer: (name: string) => void,
  *   nextRound: (currentRound: number, currentScore: number) => Promise<void>,
@@ -95,6 +98,7 @@ export function useGame() {
     streak: 0,
     maxStreak: 0,
     history: [],
+    isDaily: false,
   })
 
   /** Shuffled hero name pool for the current game session. */
@@ -150,6 +154,37 @@ export function useGame() {
         streak: 0,
         maxStreak: 0,
         history: [],
+        isDaily: false,
+      })
+      doPrefetch(pool, 1)
+    } catch {
+      setState(s => ({ ...s, phase: 'welcome' }))
+    }
+  }, [])
+
+  /**
+   * Starts today's Daily Challenge using a date-seeded deterministic shuffle,
+   * so every player on the same calendar day encounters the same hero sequence.
+   * Falls back to 'welcome' phase on error.
+   */
+  const startDailyGame = useCallback(async () => {
+    setState(s => ({ ...s, phase: 'loading' }))
+    try {
+      const pool = seededShuffle(MARVEL_HEROES, todayKey()).map(h => h.name)
+      poolRef.current = pool
+      const { hero, options } = await loadRound(pool, 0)
+      setState({
+        phase: 'playing',
+        round: 1,
+        score: 0,
+        currentHero: hero,
+        options,
+        hintsUsed: 0,
+        result: null,
+        streak: 0,
+        maxStreak: 0,
+        history: [],
+        isDaily: true,
       })
       doPrefetch(pool, 1)
     } catch {
@@ -254,8 +289,9 @@ export function useGame() {
       streak: 0,
       maxStreak: 0,
       history: [],
+      isDaily: false,
     })
   }, [])
 
-  return { ...state, startGame, useHint, submitAnswer, nextRound, restartGame, ROUNDS }
+  return { ...state, startGame, startDailyGame, useHint, submitAnswer, nextRound, restartGame, ROUNDS }
 }

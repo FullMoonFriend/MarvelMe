@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ROUNDS } from '../hooks/useGame'
 import { useHighScore } from '../hooks/useHighScore'
+import { dailyNumber, saveDailyResult } from '../utils/daily'
 
 /** Maximum achievable score: 3 pts × 10 rounds. */
 const MAX_SCORE = ROUNDS * 3 // 30
@@ -34,31 +35,45 @@ function getGrade(score) {
  * visualisation of the score, personal-best records, a share button that
  * copies a results summary to the clipboard, and a Play Again button.
  *
+ * When `isDaily` is true:
+ * - The heading shows "Daily #N" instead of "GAME OVER"
+ * - The share text includes the daily challenge number
+ * - The result is saved to localStorage so WelcomeScreen can show completion status
+ *
  * Calls `useHighScore().update` once on mount to persist new records.
  *
  * @param {object}   props
- * @param {number}   props.score   - Final score for the completed game.
- * @param {number}   props.streak  - Longest streak achieved (passed as maxStreak).
+ * @param {number}   props.score    - Final score for the completed game.
+ * @param {number}   props.streak   - Longest streak achieved (passed as maxStreak).
  * @param {Array<{correct: boolean, hintsUsed: number}>} props.history
  *   Per-round result history used to build the emoji share string.
+ * @param {boolean}  props.isDaily  - Whether this was a Daily Challenge game.
  * @param {() => void} props.onRestart - Callback to return to the welcome screen.
  */
-export default function ResultScreen({ score, streak, history, onRestart }) {
+export default function ResultScreen({ score, streak, history, isDaily, onRestart }) {
   const { bestScore, bestStreak, update } = useHighScore()
   const [copied, setCopied] = useState(false)
   const grade = getGrade(score)
+  const num = dailyNumber()
 
   useEffect(() => {
     update(score, streak)
+    if (isDaily) {
+      saveDailyResult({ score, maxStreak: streak, history })
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Builds a shareable text summary and copies it to the clipboard.
+   * Daily games include the challenge number in the header line.
    * Shows a brief "COPIED!" confirmation in the button label.
    */
   function handleShare() {
     const emoji = history.map(h => h.correct ? '✅' : '❌').join('')
-    const text = `MarvelMe — ${grade.label} (${grade.letter}) 🦸\nScore: ${score}/${MAX_SCORE} | Streak: ${streak}🔥\n${emoji}`
+    const header = isDaily
+      ? `MarvelMe Daily #${num} — ${grade.label} (${grade.letter}) 🦸`
+      : `MarvelMe — ${grade.label} (${grade.letter}) 🦸`
+    const text = `${header}\nScore: ${score}/${MAX_SCORE} | Streak: ${streak}🔥\n${emoji}`
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
@@ -67,9 +82,18 @@ export default function ResultScreen({ score, streak, history, onRestart }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f0f0f] px-4">
-      <h1 className="font-bangers text-6xl text-[#ed1d24] tracking-widest drop-shadow-[0_0_20px_rgba(237,29,36,0.6)] mb-2">
-        GAME OVER
-      </h1>
+      {isDaily ? (
+        <div className="text-center mb-2">
+          <h1 className="font-bangers text-6xl text-[#f5c518] tracking-widest drop-shadow-[0_0_20px_rgba(245,197,24,0.5)]">
+            DAILY #{num}
+          </h1>
+          <p className="text-gray-500 font-bangers text-xl tracking-widest">COMPLETE</p>
+        </div>
+      ) : (
+        <h1 className="font-bangers text-6xl text-[#ed1d24] tracking-widest drop-shadow-[0_0_20px_rgba(237,29,36,0.6)] mb-2">
+          GAME OVER
+        </h1>
+      )}
 
       <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 max-w-sm w-full text-center shadow-xl">
         {/* Grade */}
@@ -123,7 +147,7 @@ export default function ResultScreen({ score, streak, history, onRestart }) {
           text-white shadow-[0_0_20px_rgba(237,29,36,0.5)]
           transition-all duration-150"
       >
-        PLAY AGAIN
+        {isDaily ? 'BACK TO MENU' : 'PLAY AGAIN'}
       </button>
     </div>
   )

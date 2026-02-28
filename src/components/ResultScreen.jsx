@@ -41,12 +41,14 @@ function getGrade(score) {
  * @param {number}   props.streak  - Longest streak achieved (passed as maxStreak).
  * @param {Array<{correct: boolean, hintsUsed: number}>} props.history
  *   Per-round result history used to build the emoji share string.
+ * @param {boolean}  props.isDailyChallenge - Whether this was a daily challenge game.
  * @param {() => void} props.onRestart - Callback to return to the welcome screen.
  */
-export default function ResultScreen({ score, streak, history, onRestart }) {
+export default function ResultScreen({ score, streak, history, isDailyChallenge, onRestart }) {
   const { bestScore, bestStreak, update } = useHighScore()
   const [copied, setCopied] = useState(false)
   const grade = getGrade(score)
+  const dateLabel = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
   useEffect(() => {
     update(score, streak)
@@ -58,7 +60,10 @@ export default function ResultScreen({ score, streak, history, onRestart }) {
    */
   function handleShare() {
     const emoji = history.map(h => h.correct ? '✅' : '❌').join('')
-    const text = `MarvelMe — ${grade.label} (${grade.letter}) 🦸\nScore: ${score}/${MAX_SCORE} | Streak: ${streak}🔥\n${emoji}`
+    const prefix = isDailyChallenge
+      ? `MarvelMe Daily Challenge · ${dateLabel}\n`
+      : 'MarvelMe — '
+    const text = `${prefix}${grade.label} (${grade.letter}) 🦸\nScore: ${score}/${MAX_SCORE} | Streak: ${streak}🔥\n${emoji}`
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
@@ -67,9 +72,20 @@ export default function ResultScreen({ score, streak, history, onRestart }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f0f0f] px-4">
-      <h1 className="font-bangers text-6xl text-[#ed1d24] tracking-widest drop-shadow-[0_0_20px_rgba(237,29,36,0.6)] mb-2">
-        GAME OVER
-      </h1>
+      {isDailyChallenge ? (
+        <div className="text-center mb-2">
+          <div className="inline-flex items-center gap-2 bg-[#f5c518] text-[#0f0f0f] font-bangers tracking-widest px-4 py-1 rounded-full text-sm mb-2">
+            ⚡ DAILY CHALLENGE · {dateLabel.toUpperCase()}
+          </div>
+          <h1 className="font-bangers text-6xl text-[#ed1d24] tracking-widest drop-shadow-[0_0_20px_rgba(237,29,36,0.6)]">
+            GAME OVER
+          </h1>
+        </div>
+      ) : (
+        <h1 className="font-bangers text-6xl text-[#ed1d24] tracking-widest drop-shadow-[0_0_20px_rgba(237,29,36,0.6)] mb-2">
+          GAME OVER
+        </h1>
+      )}
 
       <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 max-w-sm w-full text-center shadow-xl">
         {/* Grade */}

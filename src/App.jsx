@@ -40,6 +40,7 @@ export default function App() {
         score={game.score}
         streak={game.maxStreak}
         history={game.history}
+        isDailyChallenge={game.isDailyChallenge}
         onRestart={game.restartGame}
       />
     )

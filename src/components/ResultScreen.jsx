@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ROUNDS } from '../hooks/useGame'
 import { useHighScore } from '../hooks/useHighScore'
+import { useDailyChallenge } from '../hooks/useDailyChallenge'
 
 /** Maximum achievable score: 3 pts × 10 rounds. */
 const MAX_SCORE = ROUNDS * 3 // 30
@@ -46,12 +47,14 @@ function getGrade(score) {
  */
 export default function ResultScreen({ score, streak, history, isDailyChallenge, onRestart }) {
   const { bestScore, bestStreak, update } = useHighScore()
+  const { markCompleted } = useDailyChallenge()
   const [copied, setCopied] = useState(false)
   const grade = getGrade(score)
   const dateLabel = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
   useEffect(() => {
     update(score, streak)
+    if (isDailyChallenge) markCompleted(score, grade.letter)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**

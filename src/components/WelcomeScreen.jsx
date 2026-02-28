@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import { ROUNDS } from '../hooks/useGame'
+import { useDailyChallenge } from '../hooks/useDailyChallenge'
+
+const MAX_SCORE = ROUNDS * 3
 
 /**
  * Available hero categories the player can filter by.
@@ -33,6 +37,7 @@ function getDailyLabel() {
  */
 export default function WelcomeScreen({ onStart }) {
   const [category, setCategory] = useState(null)
+  const { todayRecord } = useDailyChallenge()
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f0f0f] px-4">
@@ -113,15 +118,30 @@ export default function WelcomeScreen({ onStart }) {
       </button>
 
       {/* Daily Challenge */}
-      <button
-        onClick={() => onStart(null, { daily: true })}
-        className="mt-3 font-bangers text-xl tracking-widest px-10 py-3 rounded-xl
-          border-2 border-[#f5c518] text-[#f5c518]
-          hover:bg-[#f5c518] hover:text-[#0f0f0f]
-          active:scale-95 transition-all duration-150"
-      >
-        ⚡ DAILY CHALLENGE · {getDailyLabel()}
-      </button>
+      {todayRecord ? (
+        <div className="mt-3 flex flex-col items-center gap-1">
+          <button
+            onClick={() => onStart(null, { daily: true })}
+            className="font-bangers text-xl tracking-widest px-10 py-3 rounded-xl
+              border-2 border-[#f5c518]/40 text-[#f5c518]/50
+              hover:border-[#f5c518] hover:text-[#f5c518]
+              active:scale-95 transition-all duration-150"
+          >
+            ✓ DAILY · {getDailyLabel()} · {todayRecord.score}/{MAX_SCORE}
+          </button>
+          <p className="text-xs text-gray-600">Already played today · Play again?</p>
+        </div>
+      ) : (
+        <button
+          onClick={() => onStart(null, { daily: true })}
+          className="mt-3 font-bangers text-xl tracking-widest px-10 py-3 rounded-xl
+            border-2 border-[#f5c518] text-[#f5c518]
+            hover:bg-[#f5c518] hover:text-[#0f0f0f]
+            active:scale-95 transition-all duration-150"
+        >
+          ⚡ DAILY CHALLENGE · {getDailyLabel()}
+        </button>
+      )}
 
       <p className="mt-6 text-xs text-gray-600">
         Powered by superheroapi.com

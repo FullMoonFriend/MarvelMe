@@ -1,3 +1,20 @@
+/**
+ * Sticky top bar displayed throughout a game session.
+ *
+ * Shows:
+ * - The MarvelMe logo
+ * - Round progress bar (rounds completed / total)
+ * - Current score with an optional streak indicator
+ * - Mute/unmute toggle button
+ *
+ * @param {object}   props
+ * @param {number}   props.round         - Current 1-indexed round number.
+ * @param {number}   props.score         - Player's current score.
+ * @param {number}   props.ROUNDS        - Total number of rounds in a game.
+ * @param {number}   props.streak        - Current consecutive-correct-answer streak.
+ * @param {boolean}  props.muted         - Whether sound effects are muted.
+ * @param {() => void} props.onToggleMute - Callback to toggle the mute state.
+ */
 export default function ScoreBar({ round, score, ROUNDS, streak, muted, onToggleMute }) {
   const progress = ((round - 1) / ROUNDS) * 100
 

@@ -1,16 +1,53 @@
+/**
+ * @fileoverview Core game state machine for MarvelMe.
+ *
+ * Phase lifecycle:
+ *   welcome → loading → playing → revealed → (loading → playing) × N → gameover
+ *
+ * All game state lives in a single `useState` object managed by `useGame`.
+ * A prefetch ref starts loading the next round's data as soon as the current
+ * round finishes loading, so transitions feel instant.
+ */
+
 import { useState, useCallback, useRef } from 'react'
 import { MARVEL_HEROES } from '../data/marvelHeroes'
 import { searchHero } from '../services/superheroApi'
 
+/** Total number of rounds per game. */
 export const ROUNDS = 10
-const POINTS = [3, 2, 1, 0] // indexed by hintsUsed (0–3)
 
+/**
+ * Points awarded for a correct answer based on how many hints were used.
+ * Index matches `hintsUsed` (0 = no hints → 3 pts, 3 hints used → 0 pts).
+ *
+ * @type {number[]}
+ */
+const POINTS = [3, 2, 1, 0]
+
+/**
+ * Returns a new array with the same elements in a random order.
+ *
+ * @template T
+ * @param {T[]} arr
+ * @returns {T[]}
+ */
 function shuffle(arr) {
   return [...arr].sort(() => Math.random() - 0.5)
 }
 
-// correctIndex pins which pool entry is the answer, preventing repeats across rounds.
-// Wrong options are sampled randomly from the rest of the pool.
+/**
+ * Fetches hero data for one round.
+ *
+ * `correctIndex` pins which pool entry is the answer, preventing the same hero
+ * from appearing as the correct answer twice. Six wrong candidates are fetched
+ * so that failed API calls don't leave the options short — the final list is
+ * trimmed to at most 3 wrong options.
+ *
+ * @param {string[]} pool         - Ordered list of hero names for this game session.
+ * @param {number}   correctIndex - Index into `pool` of the correct hero for this round.
+ * @returns {Promise<{hero: object, options: Array<{name: string, image: object}>}>}
+ * @throws {Error} If the correct hero cannot be loaded, or if no wrong options are available.
+ */
 async function loadRound(pool, correctIndex) {
   const correctName = pool[correctIndex]
   // Fetch 6 wrong candidates so failed API calls don't leave us short
@@ -24,6 +61,28 @@ async function loadRound(pool, correctIndex) {
   return { hero: correctHero, options: shuffle([correctHero, ...validWrong].map(h => ({ name: h.name, image: h.image }))) }
 }
 
+/**
+ * Custom hook that owns the entire MarvelMe game lifecycle.
+ *
+ * @returns {{
+ *   phase: 'welcome'|'loading'|'playing'|'revealed'|'gameover',
+ *   round: number,
+ *   score: number,
+ *   currentHero: object|null,
+ *   options: Array<{name: string, image: object}>,
+ *   hintsUsed: number,
+ *   result: 'correct'|'wrong'|null,
+ *   streak: number,
+ *   maxStreak: number,
+ *   history: Array<{correct: boolean, hintsUsed: number}>,
+ *   ROUNDS: number,
+ *   startGame: (category: string|null) => Promise<void>,
+ *   useHint: () => void,
+ *   submitAnswer: (name: string) => void,
+ *   nextRound: (currentRound: number, currentScore: number) => Promise<void>,
+ *   restartGame: () => void,
+ * }}
+ */
 export function useGame() {
   const [state, setState] = useState({
     phase: 'welcome', // 'welcome' | 'loading' | 'playing' | 'revealed' | 'gameover'
@@ -38,15 +97,39 @@ export function useGame() {
     history: [],
   })
 
+  /** Shuffled hero name pool for the current game session. */
   const poolRef = useRef([])
+
+  /**
+   * Holds a Promise for the next round's data so it is ready before the user
+   * clicks "Next Hero". Set to null once consumed.
+   *
+   * @type {React.MutableRefObject<Promise<object>|null>}
+   */
   const prefetchRef = useRef(null)
 
+  /**
+   * Starts a background prefetch for the round at `index` in `pool`.
+   * Silently discards errors — `nextRound` will fall back to a live fetch.
+   *
+   * @param {string[]} pool
+   * @param {number}   index
+   */
   function doPrefetch(pool, index) {
     if (index < pool.length) {
       prefetchRef.current = loadRound(pool, index).catch(() => null)
     }
   }
 
+  /**
+   * Initialises and starts a new game.
+   *
+   * Shuffles the hero pool (optionally filtered by category), loads the first
+   * round, and immediately prefetches the second. Falls back to 'welcome' phase
+   * on error.
+   *
+   * @param {string|null} category - Hero category filter ('hero' | 'xmen' | 'villain' | null for all).
+   */
   const startGame = useCallback(async (category) => {
     setState(s => ({ ...s, phase: 'loading' }))
     try {
@@ -74,6 +157,10 @@ export function useGame() {
     }
   }, [])
 
+  /**
+   * Reveals the next hint for the current hero, up to a maximum of 3.
+   * Each hint costs 1 potential point. No-op outside the 'playing' phase.
+   */
   const useHint = useCallback(() => {
     setState(s => {
       if (s.phase !== 'playing' || s.hintsUsed >= 3) return s
@@ -81,6 +168,13 @@ export function useGame() {
     })
   }, [])
 
+  /**
+   * Records the player's answer and transitions to the 'revealed' phase.
+   * Updates score, streak, and history accordingly.
+   * No-op outside the 'playing' phase.
+   *
+   * @param {string} name - The hero name the player selected.
+   */
   const submitAnswer = useCallback((name) => {
     setState(s => {
       if (s.phase !== 'playing') return s
@@ -98,7 +192,19 @@ export function useGame() {
     })
   }, [])
 
-  // Called with the current round number from the component
+  /**
+   * Advances to the next round, or ends the game if all rounds are complete.
+   *
+   * IMPORTANT: `currentRound` and `currentScore` must be passed from the
+   * calling component's scope — reading them from state inside the hook would
+   * capture stale values due to closure semantics.
+   *
+   * Uses the prefetched round data if available; otherwise falls back to a
+   * live `loadRound` call. Falls back to 'welcome' phase on error.
+   *
+   * @param {number} currentRound - The 1-indexed round number just completed.
+   * @param {number} currentScore - The player's score at the end of `currentRound`.
+   */
   const nextRound = useCallback(async (currentRound, currentScore) => {
     if (currentRound >= ROUNDS) {
       setState(s => ({ ...s, phase: 'gameover' }))
@@ -130,6 +236,10 @@ export function useGame() {
     }
   }, [])
 
+  /**
+   * Resets all game state back to the initial 'welcome' phase and clears
+   * the prefetch buffer and hero pool.
+   */
   const restartGame = useCallback(() => {
     prefetchRef.current = null
     poolRef.current = []

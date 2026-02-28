@@ -14,14 +14,22 @@ const CATEGORIES = [
 ]
 
 /**
+ * Returns a short formatted date string for the daily challenge label, e.g. "FEB 28".
+ * @returns {string}
+ */
+function getDailyLabel() {
+  return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase()
+}
+
+/**
  * Landing / start screen shown in the 'welcome' game phase.
  *
  * Displays the game logo, a "How to Play" rules card with a hint legend,
- * a category selector, and a Start Game button.
+ * a category selector, a Start Game button, and a Daily Challenge button.
  *
  * @param {object}   props
- * @param {(category: string|null) => void} props.onStart
- *   Called with the selected category (or null for all) when the player starts.
+ * @param {(category: string|null, options?: { daily?: boolean }) => void} props.onStart
+ *   Called with the selected category and options when the player starts.
  */
 export default function WelcomeScreen({ onStart }) {
   const [category, setCategory] = useState(null)
@@ -102,6 +110,17 @@ export default function WelcomeScreen({ onStart }) {
           transition-all duration-150"
       >
         START GAME
+      </button>
+
+      {/* Daily Challenge */}
+      <button
+        onClick={() => onStart(null, { daily: true })}
+        className="mt-3 font-bangers text-xl tracking-widest px-10 py-3 rounded-xl
+          border-2 border-[#f5c518] text-[#f5c518]
+          hover:bg-[#f5c518] hover:text-[#0f0f0f]
+          active:scale-95 transition-all duration-150"
+      >
+        ⚡ DAILY CHALLENGE · {getDailyLabel()}
       </button>
 
       <p className="mt-6 text-xs text-gray-600">

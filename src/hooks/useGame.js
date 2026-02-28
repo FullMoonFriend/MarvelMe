@@ -87,22 +87,31 @@ function getDailySeed() {
  * so that failed API calls don't leave the options short — the final list is
  * trimmed to at most 3 wrong options.
  *
+ * If the API returns nothing for the hero at `correctIndex`, up to 4 subsequent
+ * pool entries are tried so a single unreachable hero never crashes the game.
+ * The caller receives `usedIndex` to keep the prefetch chain in sync.
+ *
  * @param {string[]} pool         - Ordered list of hero names for this game session.
  * @param {number}   correctIndex - Index into `pool` of the correct hero for this round.
- * @returns {Promise<{hero: object, options: Array<{name: string, image: object}>}>}
- * @throws {Error} If the correct hero cannot be loaded, or if no wrong options are available.
+ * @returns {Promise<{hero: object, options: Array<{name: string, image: object}>, usedIndex: number}>}
+ * @throws {Error} If no valid hero can be loaded from the pool.
  */
 async function loadRound(pool, correctIndex) {
-  const correctName = pool[correctIndex]
-  // Fetch 6 wrong candidates so failed API calls don't leave us short
-  const wrongCandidates = shuffle(pool.filter((_, i) => i !== correctIndex)).slice(0, 6)
-  const [correctHero, ...wrongResults] = await Promise.all(
-    [correctName, ...wrongCandidates].map(n => searchHero(n).catch(() => null))
-  )
-  if (!correctHero) throw new Error('Could not load correct hero')
-  const validWrong = wrongResults.filter(Boolean).slice(0, 3)
-  if (validWrong.length < 1) throw new Error('Not enough heroes loaded')
-  return { hero: correctHero, options: shuffle([correctHero, ...validWrong].map(h => ({ name: h.name, image: h.image }))) }
+  const maxTries = Math.min(5, pool.length - correctIndex)
+  for (let offset = 0; offset < maxTries; offset++) {
+    const idx = correctIndex + offset
+    const correctName = pool[idx]
+    // Fetch 6 wrong candidates so failed API calls don't leave us short
+    const wrongCandidates = shuffle(pool.filter((_, i) => i !== idx)).slice(0, 6)
+    const [correctHero, ...wrongResults] = await Promise.all(
+      [correctName, ...wrongCandidates].map(n => searchHero(n).catch(() => null))
+    )
+    if (!correctHero) continue
+    const validWrong = wrongResults.filter(Boolean).slice(0, 3)
+    if (validWrong.length < 1) continue
+    return { hero: correctHero, options: shuffle([correctHero, ...validWrong].map(h => ({ name: h.name, image: h.image }))), usedIndex: idx }
+  }
+  throw new Error('Not enough heroes loaded')
 }
 
 /**
@@ -189,13 +198,13 @@ export function useGame() {
         ? seededShuffle(filtered, getDailySeed()).map(h => h.name)
         : shuffle(filtered).map(h => h.name)
       poolRef.current = pool
-      const { hero, options } = await loadRound(pool, 0)
+      const roundData = await loadRound(pool, 0)
       setState({
         phase: 'playing',
         round: 1,
         score: 0,
-        currentHero: hero,
-        options,
+        currentHero: roundData.hero,
+        options: roundData.options,
         hintsUsed: 0,
         result: null,
         streak: 0,
@@ -203,7 +212,7 @@ export function useGame() {
         history: [],
         isDailyChallenge: daily,
       })
-      doPrefetch(pool, 1)
+      doPrefetch(pool, roundData.usedIndex + 1)
     } catch {
       setState(s => ({ ...s, phase: 'welcome' }))
     }
@@ -282,7 +291,7 @@ export function useGame() {
         hintsUsed: 0,
         result: null,
       }))
-      doPrefetch(poolRef.current, nextIndex + 1)
+      doPrefetch(poolRef.current, roundData.usedIndex + 1)
     } catch {
       setState(s => ({ ...s, phase: 'welcome' }))
     }

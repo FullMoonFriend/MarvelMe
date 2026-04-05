@@ -32,7 +32,12 @@ const POINTS = [3, 2, 1, 0]
  * @returns {T[]}
  */
 function shuffle(arr) {
-  return [...arr].sort(() => Math.random() - 0.5)
+  const out = [...arr]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
 }
 
 /**
@@ -76,7 +81,7 @@ function seededShuffle(arr, seed) {
  */
 function getDailySeed() {
   const d = new Date()
-  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()
+  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate()
 }
 
 /**
@@ -102,7 +107,7 @@ async function loadRound(pool, correctIndex) {
     const idx = correctIndex + offset
     const correctName = pool[idx]
     // Fetch 6 wrong candidates so failed API calls don't leave us short
-    const wrongCandidates = shuffle(pool.filter((_, i) => i !== idx)).slice(0, 6)
+    const wrongCandidates = pickRandom(pool, 6, idx)
     const [correctHero, ...wrongResults] = await Promise.all(
       [correctName, ...wrongCandidates].map(n => searchHero(n).catch(() => null))
     )
@@ -112,6 +117,39 @@ async function loadRound(pool, correctIndex) {
     return { hero: correctHero, options: shuffle([correctHero, ...validWrong].map(h => ({ name: h.name, image: h.image }))), usedIndex: idx }
   }
   throw new Error('Not enough heroes loaded')
+}
+
+/**
+ * Picks `count` random elements from `arr`, excluding the element at `excludeIndex`.
+ * More efficient than shuffling the entire array when only a few items are needed.
+ *
+ * @template T
+ * @param {T[]} arr
+ * @param {number} count
+ * @param {number} excludeIndex
+ * @returns {T[]}
+ */
+function pickRandom(arr, count, excludeIndex) {
+  const indices = new Set()
+  const max = Math.min(count, arr.length - 1)
+  while (indices.size < max) {
+    const i = Math.floor(Math.random() * arr.length)
+    if (i !== excludeIndex) indices.add(i)
+  }
+  return [...indices].map(i => arr[i])
+}
+
+/**
+ * Preloads images for a set of answer options so they display instantly.
+ * @param {Array<{image?: {url?: string}}>} options
+ */
+function preloadImages(options) {
+  options.forEach(opt => {
+    if (opt.image?.url) {
+      const img = new Image()
+      img.src = opt.image.url
+    }
+  })
 }
 
 /**
@@ -149,6 +187,7 @@ export function useGame() {
     maxStreak: 0,
     history: [],
     isDailyChallenge: false,
+    error: null,
   })
 
   /** Shuffled hero name pool for the current game session. */
@@ -171,7 +210,9 @@ export function useGame() {
    */
   function doPrefetch(pool, index) {
     if (index < pool.length) {
-      prefetchRef.current = loadRound(pool, index).catch(() => null)
+      prefetchRef.current = loadRound(pool, index)
+        .then(data => { preloadImages(data.options); return data })
+        .catch(() => null)
     }
   }
 
@@ -189,7 +230,7 @@ export function useGame() {
    * @param {{ daily?: boolean }} [options]
    */
   const startGame = useCallback(async (category, { daily = false } = {}) => {
-    setState(s => ({ ...s, phase: 'loading' }))
+    setState(s => ({ ...s, phase: 'loading', error: null }))
     try {
       const filtered = (!daily && category)
         ? MARVEL_HEROES.filter(h => h.category === category)
@@ -199,6 +240,7 @@ export function useGame() {
         : shuffle(filtered).map(h => h.name)
       poolRef.current = pool
       const roundData = await loadRound(pool, 0)
+      preloadImages(roundData.options)
       setState({
         phase: 'playing',
         round: 1,
@@ -211,10 +253,11 @@ export function useGame() {
         maxStreak: 0,
         history: [],
         isDailyChallenge: daily,
+        error: null,
       })
       doPrefetch(pool, roundData.usedIndex + 1)
     } catch {
-      setState(s => ({ ...s, phase: 'welcome' }))
+      setState(s => ({ ...s, phase: 'welcome', error: 'Failed to load heroes. Check your connection and try again.' }))
     }
   }, [])
 
@@ -239,7 +282,7 @@ export function useGame() {
   const submitAnswer = useCallback((name) => {
     setState(s => {
       if (s.phase !== 'playing') return s
-      const correct = name === s.currentHero.name
+      const correct = name === s.currentHero?.name
       const newStreak = correct ? s.streak + 1 : 0
       return {
         ...s,
@@ -272,7 +315,7 @@ export function useGame() {
       return
     }
 
-    setState(s => ({ ...s, phase: 'loading' }))
+    setState(s => ({ ...s, phase: 'loading', error: null }))
 
     try {
       // currentRound is 1-indexed; the next round's pool index equals currentRound
@@ -293,7 +336,7 @@ export function useGame() {
       }))
       doPrefetch(poolRef.current, roundData.usedIndex + 1)
     } catch {
-      setState(s => ({ ...s, phase: 'welcome' }))
+      setState(s => ({ ...s, phase: 'welcome', error: 'Failed to load the next round. Check your connection and try again.' }))
     }
   }, [])
 
@@ -316,6 +359,7 @@ export function useGame() {
       maxStreak: 0,
       history: [],
       isDailyChallenge: false,
+      error: null,
     })
   }, [])
 

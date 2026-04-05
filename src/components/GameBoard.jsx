@@ -1,7 +1,8 @@
+import { useEffect } from 'react'
 import ScoreBar from './ScoreBar'
 import HintPanel from './HintPanel'
 import AnswerOptions from './AnswerOptions'
-import { playHint, playGameOver } from '../services/sounds'
+import { playHint, playCorrect, playWrong, playGameOver } from '../services/sounds'
 
 /**
  * Main game screen rendered during the 'loading', 'playing', and 'revealed' phases.
@@ -31,7 +32,7 @@ export default function GameBoard({ game, muted, onToggleMute }) {
     hintsUsed,
     result,
     ROUNDS,
-    useHint,
+    useHint: revealHint,
     submitAnswer,
     nextRound,
   } = game
@@ -40,11 +41,37 @@ export default function GameBoard({ game, muted, onToggleMute }) {
   const isRevealed = phase === 'revealed'
   const canHint = phase === 'playing' && hintsUsed < 3
 
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (phase === 'playing') {
+        const idx = parseInt(e.key, 10) - 1
+        if (idx >= 0 && idx < options.length) {
+          const name = options[idx].name
+          const isCorrect = name === currentHero?.name
+          isCorrect ? playCorrect() : playWrong()
+          submitAnswer(name)
+          return
+        }
+        if (e.key.toLowerCase() === 'h' && hintsUsed < 3) {
+          playHint()
+          revealHint()
+          return
+        }
+      }
+      if (phase === 'revealed' && e.key === 'Enter') {
+        if (round >= ROUNDS) playGameOver()
+        nextRound(round, score)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [phase, options, currentHero, hintsUsed, round, score, ROUNDS, submitAnswer, revealHint, nextRound])
+
   if (isLoading || !currentHero) {
     return (
       <div className="min-h-screen flex flex-col bg-[#0f0f0f]">
         <ScoreBar round={round || 1} score={score} ROUNDS={ROUNDS} streak={streak} muted={muted} onToggleMute={onToggleMute} />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center" role="status" aria-label="Loading next hero">
           <div className="text-center">
             <div className="w-12 h-12 border-4 border-[#ed1d24] border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="mt-4 text-gray-400 font-bangers text-xl tracking-widest">LOADING HERO...</p>
@@ -112,8 +139,9 @@ export default function GameBoard({ game, muted, onToggleMute }) {
         <div className="mt-6 flex gap-3">
           {!isRevealed && (
             <button
-              onClick={() => { playHint(); useHint() }}
+              onClick={() => { playHint(); revealHint() }}
               disabled={!canHint}
+              aria-label={`Use hint, ${3 - hintsUsed} remaining`}
               className={`font-bangers text-lg tracking-wider px-6 py-3 rounded-xl border-2 transition-all duration-150
                 ${canHint
                   ? 'border-[#f5c518] text-[#f5c518] hover:bg-[#f5c518]/10 active:scale-95'

@@ -19,7 +19,7 @@ import { playCorrect, playWrong } from '../services/sounds'
  */
 export default function AnswerOptions({ options, onSelect, result, correctName, disabled }) {
   return (
-    <div className="w-full max-w-sm mx-auto mt-6 grid grid-cols-2 gap-3">
+    <div className="w-full max-w-sm mx-auto mt-6 grid grid-cols-2 gap-3" role="group" aria-label="Answer choices">
       {options.map((option) => {
         const isCorrect = option.name === correctName
 
@@ -45,7 +45,7 @@ export default function AnswerOptions({ options, onSelect, result, correctName, 
             }}
             disabled={disabled}
             className={`border-2 rounded-xl overflow-hidden transition-all duration-200
-              bg-[#1a1a1a]
+              bg-[#1a1a1a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f5c518]
               ${borderStyle}
               ${!disabled ? 'cursor-pointer active:scale-95' : 'cursor-default'}
               ${overlayStyle}
@@ -57,6 +57,8 @@ export default function AnswerOptions({ options, onSelect, result, correctName, 
               className="w-full aspect-square object-cover object-top"
             />
             <p className="text-sm font-semibold text-center text-white pt-2 pb-2 px-1 leading-tight">
+              {disabled && isCorrect && <span aria-hidden="true">&#x2714; </span>}
+              {disabled && !isCorrect && <span aria-hidden="true">&#x2718; </span>}
               {option.name}
             </p>
           </button>

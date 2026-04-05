@@ -31,7 +31,7 @@ export default function App() {
   }
 
   if (game.phase === 'welcome') {
-    return <WelcomeScreen onStart={game.startGame} />
+    return <WelcomeScreen onStart={game.startGame} error={game.error} />
   }
 
   if (game.phase === 'gameover') {

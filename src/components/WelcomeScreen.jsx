@@ -35,7 +35,7 @@ function getDailyLabel() {
  * @param {(category: string|null, options?: { daily?: boolean }) => void} props.onStart
  *   Called with the selected category and options when the player starts.
  */
-export default function WelcomeScreen({ onStart }) {
+export default function WelcomeScreen({ onStart, error }) {
   const [category, setCategory] = useState(null)
   const { todayRecord } = useDailyChallenge()
 
@@ -89,6 +89,13 @@ export default function WelcomeScreen({ onStart }) {
           </div>
         </div>
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mt-6 max-w-md w-full bg-red-900/30 border border-red-800 rounded-xl px-4 py-3 text-center">
+          <p className="text-red-400 text-sm font-semibold">{error}</p>
+        </div>
+      )}
 
       {/* Category selector */}
       <div className="mt-6 flex gap-2">

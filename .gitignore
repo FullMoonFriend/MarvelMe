@@ -17,6 +17,11 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Recon script outputs (build artifacts, large)
+scripts/full-universe.json
+scripts/marvel-catalog.json
+scripts/rescue-candidates.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

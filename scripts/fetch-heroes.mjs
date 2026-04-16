@@ -83,10 +83,38 @@ async function fetchHero(id) {
   return null
 }
 
+// --- Portrait download + WebP encode ---
+async function downloadPortrait(url, outPath) {
+  const res = await fetch(url, {
+    headers: {
+      // Mimic a normal browser UA so the upstream CDN doesn't 403.
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+    },
+  })
+  if (!res.ok) throw new Error(`portrait fetch failed: ${res.status}`)
+  const buf = Buffer.from(await res.arrayBuffer())
+  await sharp(buf)
+    .resize({ width: 512, height: 512, fit: 'cover', position: 'top' })
+    .webp({ quality: 82 })
+    .toFile(outPath)
+}
+
 // --- Smoke test ---
 const probe = await fetchHero(213)
 if (!probe || probe.name !== 'Deadpool') {
   console.error('FAIL: probe expected Deadpool, got:', probe?.name)
   process.exit(1)
 }
-console.log(`OK: probe id=213 returned name="${probe.name}"`)
+console.log(`OK: API probe id=213 returned name="${probe.name}"`)
+
+const tmpPath = resolve(ROOT, 'scripts/_probe.webp')
+await downloadPortrait(probe.image.url, tmpPath)
+const { statSync, unlinkSync } = await import('node:fs')
+const size = statSync(tmpPath).size
+unlinkSync(tmpPath)
+if (size < 1000 || size > 200_000) {
+  console.error(`FAIL: probe portrait size ${size} bytes outside [1k, 200k]`)
+  process.exit(1)
+}
+console.log(`OK: portrait probe wrote ${size} bytes WebP`)

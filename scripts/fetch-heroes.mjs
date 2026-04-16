@@ -58,6 +58,13 @@ if (limitArg) {
   LIMIT = value
 }
 
+const sourceArg = process.argv.find(a => a.startsWith('--source='))
+const SOURCE_DIR = sourceArg
+  ? sourceArg.split('=')[1]
+  : resolve(process.env.HOME || process.env.USERPROFILE || '/', 'Downloads')
+
+const IS_PROCESS_MODE = process.argv.includes('--process')
+
 // --- API fetch with one retry on 5xx / network error ---
 async function fetchHero(id) {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -130,6 +137,94 @@ function deriveCategory(hero) {
   if (/x[- ]?men/i.test(groups)) return 'xmen'
   if (hero.biography?.alignment === 'bad') return 'villain'
   return 'hero'
+}
+
+// --- Process-mode branch: skip Phase 1 entirely ---
+if (IS_PROCESS_MODE) {
+  console.log('Phase 3: processing downloaded portraits...')
+  console.log(`  source directory: ${SOURCE_DIR}`)
+
+  const metaPath = resolve(ROOT, 'scripts/heroes-metadata.json')
+  if (!existsSync(metaPath)) {
+    console.error(
+      `Missing ${metaPath}. Run 'npm run fetch-heroes' (no flag) first to do Phase 1.`,
+    )
+    process.exit(1)
+  }
+  const metadata = JSON.parse(readFileSync(metaPath, 'utf8'))
+
+  const PORTRAIT_DIR = resolve(ROOT, 'public/portraits')
+  mkdirSync(PORTRAIT_DIR, { recursive: true })
+
+  const missing = []
+  const encodeErrors = []
+  let encoded = 0
+  for (const hero of metadata) {
+    const srcPath = resolve(SOURCE_DIR, `mm-${hero.id}.jpg`)
+    if (!existsSync(srcPath)) {
+      missing.push({ id: hero.id, name: hero.name })
+      continue
+    }
+    const outPath = resolve(PORTRAIT_DIR, `${hero.id}.webp`)
+    try {
+      await sharp(readFileSync(srcPath))
+        .resize({ width: 512, height: 512, fit: 'cover', position: 'top' })
+        .webp({ quality: 82 })
+        .toFile(outPath)
+      hero.image.url = `/portraits/${hero.id}.webp`
+      encoded++
+      if (encoded % 50 === 0) {
+        process.stdout.write(`\r  encoded ${encoded}/${metadata.length}`)
+      }
+    } catch (e) {
+      encodeErrors.push({ id: hero.id, name: hero.name, error: e.message })
+    }
+  }
+  process.stdout.write('\n')
+  console.log(`  encoded ${encoded} portraits`)
+
+  if (missing.length) {
+    console.log(`  ⚠ ${missing.length} heroes missing their mm-<id>.jpg source file:`)
+    missing.slice(0, 10).forEach(m => console.log(`    id=${m.id} ${m.name}`))
+    if (missing.length > 10) console.log(`    ...and ${missing.length - 10} more`)
+  }
+  if (encodeErrors.length) {
+    console.log(`  ⚠ ${encodeErrors.length} sharp/encode failures:`)
+    encodeErrors.forEach(e => console.log(`    id=${e.id} ${e.name}: ${e.error}`))
+  }
+
+  const final = metadata.filter(
+    h =>
+      !missing.find(m => m.id === h.id) &&
+      !encodeErrors.find(e => e.id === h.id),
+  )
+  const outFile = resolve(ROOT, 'src/data/heroes.json')
+  mkdirSync(dirname(outFile), { recursive: true })
+  writeFileSync(outFile, JSON.stringify(final, null, 2) + '\n')
+  console.log(`  wrote ${final.length} heroes → src/data/heroes.json`)
+
+  // Cleanup — only if we processed everything cleanly
+  if (!missing.length && !encodeErrors.length) {
+    const { unlinkSync } = await import('node:fs')
+    try {
+      unlinkSync(resolve(ROOT, 'scripts/heroes-metadata.json'))
+      unlinkSync(resolve(ROOT, 'scripts/portrait-snippet.js'))
+      for (const h of metadata) {
+        const srcPath = resolve(SOURCE_DIR, `mm-${h.id}.jpg`)
+        try {
+          unlinkSync(srcPath)
+        } catch {}
+      }
+      console.log('  cleaned up intermediate files')
+    } catch (e) {
+      console.log(`  cleanup warning: ${e.message}`)
+    }
+  } else {
+    console.log('  skipping cleanup (some heroes missing or failed)')
+  }
+
+  console.log('\nDone.')
+  process.exit(0)
 }
 
 // --- Phase 1: enumerate API ---

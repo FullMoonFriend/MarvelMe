@@ -25,7 +25,19 @@ const BATCH = 10
 const SLEEP_MS = 100
 
 // --- Token ---
-const envText = readFileSync(resolve(ROOT, '.env'), 'utf8')
+let envText
+try {
+  envText = readFileSync(resolve(ROOT, '.env'), 'utf8')
+} catch (e) {
+  if (e.code === 'ENOENT') {
+    console.error(
+      '.env file not found. Create it with VITE_SUPERHERO_API_TOKEN=<token> (get one at https://superheroapi.com/api.html)',
+    )
+  } else {
+    console.error('Error reading .env:', e.message)
+  }
+  process.exit(1)
+}
 const token = envText.match(/VITE_SUPERHERO_API_TOKEN=(.+)/)?.[1]?.trim()
 if (!token) {
   console.error('Missing VITE_SUPERHERO_API_TOKEN in .env')
@@ -35,7 +47,16 @@ const BASE = `https://www.superheroapi.com/api.php/${token}`
 
 // --- CLI ---
 const limitArg = process.argv.find(a => a.startsWith('--limit='))
-const LIMIT = limitArg ? Number(limitArg.split('=')[1]) : null
+let LIMIT = null
+if (limitArg) {
+  const raw = limitArg.split('=')[1]
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value <= 0) {
+    console.error(`Invalid --limit value: "${raw}" (must be a positive integer)`)
+    process.exit(1)
+  }
+  LIMIT = value
+}
 
 // --- API fetch with one retry on 5xx / network error ---
 async function fetchHero(id) {

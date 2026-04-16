@@ -111,9 +111,17 @@ const RESCUE_IDS = new Set([
 ])
 
 const DROP_IDS = new Set([
+  // Iteration suffixes conflicting with rescued originals
   31,   // Ant-Man II  (Scott Lang) — display-name conflict with id 30
   314,  // Hawkeye II  (Kate Bishop) — display-name conflict with id 313
   688,  // Venom II    (Angelo Fortunato) — display-name conflict with id 687
+  // Display-name collisions surfaced by Task 3r audit
+  117,  // "Blizzard" duplicate (empty record; id 116 keeps Gregor Shapanka)
+  482,  // "Namor" duplicate (empty record; id 481 keeps Namor McKenzie)
+  497,  // "Nova" (Frankie Raye) — display-name conflict with id 496 (Richard Rider)
+  621,  // "Spider-Man" (Miguel O'Hara / 2099) — conflict with id 620 (Peter Parker)
+  622,  // "Spider-Man" (Miles Morales) — conflict with id 620 (Peter Parker)
+  694,  // "Vindicator" (empty record) — conflict with id 693 (James Hudson)
 ])
 
 // --- Category derivation ---

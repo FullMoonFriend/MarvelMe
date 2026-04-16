@@ -83,38 +83,111 @@ async function fetchHero(id) {
   return null
 }
 
-// --- Portrait download + WebP encode ---
-async function downloadPortrait(url, outPath) {
-  const res = await fetch(url, {
-    headers: {
-      // Mimic a normal browser UA so the upstream CDN doesn't 403.
-      'User-Agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-    },
-  })
-  if (!res.ok) throw new Error(`portrait fetch failed: ${res.status}`)
-  const buf = Buffer.from(await res.arrayBuffer())
-  await sharp(buf)
-    .resize({ width: 512, height: 512, fit: 'cover', position: 'top' })
-    .webp({ quality: 82 })
-    .toFile(outPath)
+// --- Selection lists ---
+const RESCUE_IDS = new Set([
+  9,    // Agent 13 (Sharon Carter)
+  24,   // Angel (Warren Worthington III)
+  26,   // Angel Salvadore
+  30,   // Ant-Man (Hank Pym)
+  34,   // Anti-Venom
+  48,   // Atlas
+  135,  // Box IV
+  157,  // Captain Marvel (Carol Danvers)
+  170,  // Chameleon
+  213,  // Deadpool
+  288,  // Gog
+  313,  // Hawkeye (Clint Barton)
+  356,  // Jean Grey
+  361,  // Jessica Jones
+  379,  // Kang
+  577,  // Scarlet Spider
+  581,  // Scorpion (Mac Gargan)
+  614,  // Speedball
+  659,  // Thor (Odinson)
+  687,  // Venom (Eddie Brock)
+  693,  // Vindicator
+  697,  // Vision
+  707,  // Warpath
+])
+
+const DROP_IDS = new Set([
+  31,   // Ant-Man II  (Scott Lang) — display-name conflict with id 30
+  314,  // Hawkeye II  (Kate Bishop) — display-name conflict with id 313
+  688,  // Venom II    (Angelo Fortunato) — display-name conflict with id 687
+])
+
+// --- Category derivation ---
+function deriveCategory(hero) {
+  const groups = hero.connections?.['group-affiliation'] || ''
+  if (/x[- ]?men/i.test(groups)) return 'xmen'
+  if (hero.biography?.alignment === 'bad') return 'villain'
+  return 'hero'
 }
 
-// --- Smoke test ---
-const probe = await fetchHero(213)
-if (!probe || probe.name !== 'Deadpool') {
-  console.error('FAIL: probe expected Deadpool, got:', probe?.name)
-  process.exit(1)
+// --- Phase 1: enumerate API ---
+console.log('Phase 1a: enumerating Superhero API...')
+const all = []
+const fetchErrors = []
+for (let start = 1; start <= MAX_ID; start += BATCH) {
+  const ids = Array.from({ length: BATCH }, (_, i) => start + i).filter(
+    i => i <= MAX_ID,
+  )
+  const results = await Promise.all(
+    ids.map(id => fetchHero(id).then(d => [id, d])),
+  )
+  for (const [id, data] of results) {
+    if (data) all.push(data)
+    else fetchErrors.push(id)
+  }
+  process.stdout.write(`\r  fetched ${all.length} / ${start + BATCH - 1}`)
+  await sleep(SLEEP_MS)
 }
-console.log(`OK: API probe id=213 returned name="${probe.name}"`)
+process.stdout.write('\n')
+if (fetchErrors.length) {
+  console.log(`  ${fetchErrors.length} IDs returned no data`)
+}
 
-const tmpPath = resolve(ROOT, 'scripts/_probe.webp')
-await downloadPortrait(probe.image.url, tmpPath)
-const { statSync, unlinkSync } = await import('node:fs')
-const size = statSync(tmpPath).size
-unlinkSync(tmpPath)
-if (size < 1000 || size > 200_000) {
-  console.error(`FAIL: probe portrait size ${size} bytes outside [1k, 200k]`)
-  process.exit(1)
+// --- Phase 1b: select + dedup + categorize ---
+console.log('Phase 1b: selecting + deduping + categorizing...')
+let selected = all.filter(h => {
+  const idNum = Number(h.id)
+  if (DROP_IDS.has(idNum)) return false
+  const isConfirmed = h.biography?.publisher === 'Marvel Comics'
+  const isRescued = RESCUE_IDS.has(idNum)
+  return isConfirmed || isRescued
+})
+selected = selected.filter(
+  h => h.image?.url && !h.image.url.includes('no-portrait'),
+)
+if (LIMIT) {
+  selected = selected.slice(0, LIMIT)
+  console.log(`  --limit=${LIMIT} → trimmed to ${selected.length}`)
 }
-console.log(`OK: portrait probe wrote ${size} bytes WebP`)
+const categoryCounts = { hero: 0, xmen: 0, villain: 0 }
+for (const hero of selected) {
+  hero.category = deriveCategory(hero)
+  categoryCounts[hero.category]++
+}
+selected.sort((a, b) => Number(a.id) - Number(b.id))
+console.log(`  selected ${selected.length} heroes`)
+console.log(
+  `  categories: hero=${categoryCounts.hero}, xmen=${categoryCounts.xmen}, villain=${categoryCounts.villain}`,
+)
+
+// --- Display-name collision audit ---
+const byName = new Map()
+for (const h of selected) {
+  if (!byName.has(h.name)) byName.set(h.name, [])
+  byName.get(h.name).push(h.id)
+}
+const collisions = [...byName.entries()].filter(([, ids]) => ids.length > 1)
+if (collisions.length) {
+  console.log(
+    `  ⚠ ${collisions.length} display-name collision(s) — consider adding to DROP_IDS:`,
+  )
+  collisions.forEach(([name, ids]) =>
+    console.log(`    "${name}": ${ids.join(', ')}`),
+  )
+}
+
+console.log('\n(Phase 1 output-file writing not yet implemented — see Task 4r)')

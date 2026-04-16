@@ -5,8 +5,11 @@
  * src/data/heroes.json that the runtime imports synchronously.
  *
  * Usage:
- *   node scripts/fetch-heroes.mjs              # full run (~360 heroes)
- *   node scripts/fetch-heroes.mjs --limit=5    # smoke-test mode
+ *   node scripts/fetch-heroes.mjs                      # Phase 1: fetch API metadata + write snippet
+ *   node scripts/fetch-heroes.mjs --limit=5            # Phase 1 smoke-test mode
+ *   node scripts/fetch-heroes.mjs --process            # Phase 3: encode portraits from ~/Downloads
+ *   node scripts/fetch-heroes.mjs --process --source=<path>
+ *                                                      # Phase 3 with custom source directory
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'

@@ -5,22 +5,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev       # Start dev server (localhost:5173)
-npm run build     # Production build to dist/
-npm run preview   # Preview production build
-npm run lint      # Run ESLint
+npm run dev            # Start dev server (localhost:5173)
+npm run build          # Production build to dist/
+npm run preview        # Preview production build
+npm run lint           # Run ESLint
+npm test               # Run the vitest test suite once
+npm run test:watch     # Run vitest in watch mode
+npm run fetch-heroes   # Regenerate src/data/heroes.json + public/portraits/ (build-time only)
 ```
-
-No test runner is configured.
 
 ## Environment
 
-Requires `.env` with:
-```
-VITE_SUPERHERO_API_TOKEN=<token>
-```
+The runtime app needs **no environment variables** — hero data and portraits are pre-bundled at build time.
 
-Get a token at https://superheroapi.com/api.html. Without it, API calls return null per hero, causing the "Not enough heroes loaded" error. The repo includes `.env.example` (empty) and `.env.dev` (empty) as templates.
+`VITE_SUPERHERO_API_TOKEN` is only required when running `npm run fetch-heroes` to regenerate the bundle. Get a token at https://superheroapi.com/api.html and put it in `.env`. The repo includes `.env.example` as a template.
 
 ## Tech Stack
 
@@ -28,23 +26,25 @@ Get a token at https://superheroapi.com/api.html. Without it, API calls return n
 - **Vite 7** — Dev server + build tool
 - **Tailwind CSS v4** — Utility classes; custom tokens declared in `tailwind.config.js`
 - **ESLint 9** — Flat config format (`eslint.config.js`)
+- **Vitest 4** + **@testing-library/react** — Tests under `src/**/__tests__/*.test.js`
 - **Web Audio API** — Sound effects synthesised in code, no audio files
+- **Superhero API** (superheroapi.com) — build-time only; not called at runtime
 
 ## Architecture
 
-The game is a single-page React app with no backend. All game state lives in one custom hook.
+The game is a single-page React app with no backend and no runtime network calls for hero data. All game state lives in one custom hook.
 
 ### State machine (`src/hooks/useGame.js`)
 
 The entire game lifecycle is managed here. Phases flow:
 
 ```
-welcome → loading → playing → revealed → (loading → playing)×N → gameover
+welcome → playing → revealed → (playing → revealed)×N → gameover
 ```
 
-**Key detail:** `nextRound(currentRound, currentScore)` requires the caller to pass current values from component scope (not read from state inside the hook) to avoid stale closure issues.
+Round transitions are synchronous — hero data is read from the pre-bundled `src/data/heroes.json` via a direct ESM import, so there is no loading phase and no prefetch dance.
 
-**Prefetching:** `useGame` fires a background `loadRound()` into `prefetchRef` immediately after each round enters `playing`, so the next round's data is ready before the user clicks "Next Hero". If the prefetch fails, `nextRound` falls back to a live fetch.
+**Key detail:** `nextRound(currentRound, currentScore)` requires the caller to pass current values from component scope (not read from state inside the hook) to avoid stale closure issues.
 
 **Game constants:**
 - `ROUNDS = 10` — total rounds per game
@@ -54,7 +54,7 @@ welcome → loading → playing → revealed → (loading → playing)×N → ga
 **State shape:**
 ```js
 {
-  phase: 'welcome' | 'loading' | 'playing' | 'revealed' | 'gameover',
+  phase: 'welcome' | 'playing' | 'revealed' | 'gameover',
   round: number,           // 1–10
   score: number,
   currentHero: object | null,
@@ -64,38 +64,43 @@ welcome → loading → playing → revealed → (loading → playing)×N → ga
   streak: number,
   maxStreak: number,
   history: Array<{ correct, hintsUsed }>,
+  isDailyChallenge: boolean,
 }
 ```
 
 **Public API from `useGame`:**
 | Method | Description |
 |--------|-------------|
-| `startGame(category?)` | Filters hero pool by category (null = all, `'hero'`, `'xmen'`, `'villain'`), loads round 1, prefetches round 2 |
+| `startGame(category, { daily } = {})` | Filters hero pool by category (null = all, `'hero'`, `'xmen'`, `'villain'`) and starts round 1. When `daily: true`, category is ignored and the pool is shuffled with today's UTC-date seed so every player sees the same sequence. |
 | `useHint()` | Increments `hintsUsed` (max 3); no-op outside `playing` phase |
 | `submitAnswer(name)` | Compares name to hero, updates score/streak, transitions to `revealed` |
-| `nextRound(currentRound, currentScore)` | Advances round (uses prefetch); transitions to `gameover` if round ≥ ROUNDS |
+| `nextRound(currentRound, currentScore)` | Advances round; transitions to `gameover` if round ≥ ROUNDS |
 | `restartGame()` | Resets to `welcome` phase |
 
-### API layer (`src/services/superheroApi.js`)
+### Bundled hero data (`src/data/heroes.json`)
 
-`searchHero(name)` fetches by name from `https://www.superheroapi.com/api.php/{token}/search/{name}`. It prefers results with a real image (filters out `no-portrait`) and caches all responses in a module-level `Map` for the session lifetime. `clearCache()` flushes it.
+All hero records are pre-fetched at build time by `scripts/fetch-heroes.mjs` and committed to the repo. The runtime imports the JSON synchronously — no network calls during gameplay.
 
-**Hero object shape (relevant fields):**
+**Hero object shape (preserves Superhero API field names):**
 ```js
 {
-  name, image: { url },
-  biography: { 'full-name', 'first-appearance' },
+  id, name, category,             // category added at build time
+  image: { url },                 // rewritten to /portraits/<id>.webp
+  biography: { 'full-name', 'first-appearance', publisher, alignment },
   powerstats: { intelligence, strength, speed, durability, power, combat },
   work: { occupation, base },
   appearance: { gender, race, height, 'hair-color', 'eye-color' },
+  connections: { 'group-affiliation', ... },
 }
 ```
 
-### Hero pool (`src/data/marvelHeroes.js`)
+**Portraits** live under `public/portraits/<id>.webp`, sized 512×512 max (WebP quality 82), served as same-origin static assets.
 
-A curated static list of ~140 characters (`MARVEL_HEROES`) known to have good API results. Each entry is `{ name: string, category: 'hero' | 'xmen' | 'villain' }`. Each round samples 4 names from a shuffled copy of the filtered pool.
+**To regenerate the bundle:** edit `RESCUE_IDS` / `DROP_IDS` in `scripts/fetch-heroes.mjs` if needed, then run `npm run fetch-heroes` (automated Phase 1) → paste the generated `scripts/portrait-snippet.js` into `superherodb.com`'s DevTools console (browser-assisted Phase 2 — the CDN blocks server-side fetches via Cloudflare's bot challenge) → `npm run fetch-heroes -- --process` (automated Phase 3: encode WebP, write final JSON, cleanup).
 
-**Breakdown:** ~64 heroes, ~31 X-Men, ~45 villains.
+### Hero pool
+
+~344 Marvel characters total, derived from Superhero API IDs at build time. Each round samples 4 from a shuffled copy of the filtered pool (filter by `category`: `null` for all, `'hero'`, `'xmen'`, or `'villain'`). Categories are derived from the API's `connections.group-affiliation` field (X-Men membership → `xmen`) and `biography.alignment` (`bad` → `villain`; else `hero`).
 
 ### Scoring & hints
 
@@ -129,7 +134,7 @@ Persists `{ bestScore, bestStreak }` to `localStorage` under `'marvelme-highscor
 ```
 App.jsx                  # Phase-based router; owns mute state
 ├─ WelcomeScreen.jsx     # Rules, category picker, start button
-└─ GameBoard.jsx         # All active game phases (loading/playing/revealed)
+└─ GameBoard.jsx         # 'playing' and 'revealed' phases
    ├─ ScoreBar.jsx       # Sticky top: logo, round progress bar, streak, score, mute
    ├─ HintPanel.jsx      # Clues panel with progressive hint reveal
    └─ AnswerOptions.jsx  # 2×2 portrait grid; highlighted on reveal
@@ -141,7 +146,7 @@ ResultScreen.jsx         # Grade, score, personal bests, share, play again
 - `'gameover'` → ResultScreen
 - all others → GameBoard
 
-**GameBoard.jsx** receives the entire `game` object from `useGame`. It renders a sticky ScoreBar, a loading spinner during fetches, then the hint panel + answer grid + action buttons. Action buttons:
+**GameBoard.jsx** receives the entire `game` object from `useGame`. It renders a sticky ScoreBar, the hint panel, answer grid, and action buttons:
 - Playing phase: "USE HINT" (disabled if `hintsUsed >= 3`)
 - Revealed phase: "NEXT HERO →" or "SEE RESULTS" (on round 10)
 
@@ -192,11 +197,18 @@ src/
     AnswerOptions.jsx
     ResultScreen.jsx
   hooks/
-    useGame.js                # Core state machine (entire game lifecycle)
+    useGame.js                # Core state machine (synchronous, reads heroes.json)
     useHighScore.js           # localStorage best score/streak
   services/
-    superheroApi.js           # API client + session cache
     sounds.js                 # Web Audio synthesis + mute toggle
   data/
-    marvelHeroes.js           # ~140 curated characters with categories
+    heroes.json               # ~344 Marvel heroes, pre-fetched at build time
+  test/
+    setup.js                  # Vitest setup (e.g. jest-dom matchers)
+
+public/
+  portraits/                  # WebP portraits, one per hero, named <id>.webp
+
+scripts/
+  fetch-heroes.mjs            # Build-time Superhero API fetcher + WebP pipeline
 ```

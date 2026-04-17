@@ -5,10 +5,9 @@ import AnswerOptions from './AnswerOptions'
 import { playHint, playCorrect, playWrong, playGameOver } from '../services/sounds'
 
 /**
- * Main game screen rendered during the 'loading', 'playing', and 'revealed' phases.
+ * Main game screen rendered during the 'playing' and 'revealed' phases.
  *
- * Renders a loading spinner while hero data is being fetched, then switches to
- * the full game layout containing:
+ * Renders the game layout containing:
  * - ScoreBar (always visible)
  * - Points-remaining indicator
  * - HintPanel (clues + optional hints)
@@ -37,7 +36,6 @@ export default function GameBoard({ game, muted, onToggleMute }) {
     nextRound,
   } = game
 
-  const isLoading = phase === 'loading'
   const isRevealed = phase === 'revealed'
   const canHint = phase === 'playing' && hintsUsed < 3
 
@@ -66,20 +64,6 @@ export default function GameBoard({ game, muted, onToggleMute }) {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [phase, options, currentHero, hintsUsed, round, score, ROUNDS, submitAnswer, revealHint, nextRound])
-
-  if (isLoading || !currentHero) {
-    return (
-      <div className="min-h-screen flex flex-col bg-[#0f0f0f]">
-        <ScoreBar round={round || 1} score={score} ROUNDS={ROUNDS} streak={streak} muted={muted} onToggleMute={onToggleMute} />
-        <div className="flex-1 flex items-center justify-center" role="status" aria-label="Loading next hero">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-[#ed1d24] border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="mt-4 text-gray-400 font-bangers text-xl tracking-widest">LOADING HERO...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0f0f0f]">

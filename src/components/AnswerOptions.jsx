@@ -54,8 +54,6 @@ export default function AnswerOptions({ options, onSelect, result, correctName, 
             <img
               src={option.image?.url}
               alt={option.name}
-              referrerPolicy="no-referrer"
-              loading="lazy"
               className="w-full aspect-square object-cover object-top"
             />
             <p className="text-sm font-semibold text-center text-white pt-2 pb-2 px-1 leading-tight">

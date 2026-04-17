@@ -1,0 +1,365 @@
+#!/usr/bin/env node
+/**
+ * Build-time fetcher: pulls every Marvel character from the Superhero API,
+ * downloads + re-encodes portraits as WebP, and writes a self-contained
+ * src/data/heroes.json that the runtime imports synchronously.
+ *
+ * Usage:
+ *   node scripts/fetch-heroes.mjs                      # Phase 1: fetch API metadata + write snippet
+ *   node scripts/fetch-heroes.mjs --limit=5            # Phase 1 smoke-test mode
+ *   node scripts/fetch-heroes.mjs --process            # Phase 3: encode portraits from ~/Downloads
+ *   node scripts/fetch-heroes.mjs --process --source=<path>
+ *                                                      # Phase 3 with custom source directory
+ */
+
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { Buffer } from 'node:buffer'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+import sharp from 'sharp'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const ROOT = resolve(__dirname, '..')
+
+// --- Config ---
+const MAX_ID = 731
+const BATCH = 10
+const SLEEP_MS = 100
+
+// --- Token ---
+let envText
+try {
+  envText = readFileSync(resolve(ROOT, '.env'), 'utf8')
+} catch (e) {
+  if (e.code === 'ENOENT') {
+    console.error(
+      '.env file not found. Create it with VITE_SUPERHERO_API_TOKEN=<token> (get one at https://superheroapi.com/api.html)',
+    )
+  } else {
+    console.error('Error reading .env:', e.message)
+  }
+  process.exit(1)
+}
+const token = envText.match(/VITE_SUPERHERO_API_TOKEN=(.+)/)?.[1]?.trim()
+if (!token) {
+  console.error('Missing VITE_SUPERHERO_API_TOKEN in .env')
+  process.exit(1)
+}
+const BASE = `https://www.superheroapi.com/api.php/${token}`
+
+// --- CLI ---
+const limitArg = process.argv.find(a => a.startsWith('--limit='))
+let LIMIT = null
+if (limitArg) {
+  const raw = limitArg.split('=')[1]
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value <= 0) {
+    console.error(`Invalid --limit value: "${raw}" (must be a positive integer)`)
+    process.exit(1)
+  }
+  LIMIT = value
+}
+
+const sourceArg = process.argv.find(a => a.startsWith('--source='))
+const SOURCE_DIR = sourceArg
+  ? sourceArg.split('=')[1]
+  : resolve(process.env.HOME || process.env.USERPROFILE || '/', 'Downloads')
+
+const IS_PROCESS_MODE = process.argv.includes('--process')
+
+// --- API fetch with one retry on 5xx / network error ---
+async function fetchHero(id) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${BASE}/${id}`)
+      if (!res.ok) {
+        if (res.status >= 500 && attempt === 0) {
+          await sleep(500)
+          continue
+        }
+        return null
+      }
+      const data = await res.json()
+      if (data.response === 'error') return null
+      return data
+    } catch {
+      if (attempt === 0) {
+        await sleep(500)
+        continue
+      }
+    }
+  }
+  return null
+}
+
+// --- Selection lists ---
+const RESCUE_IDS = new Set([
+  9,    // Agent 13 (Sharon Carter)
+  24,   // Angel (Warren Worthington III)
+  26,   // Angel Salvadore
+  30,   // Ant-Man (Hank Pym)
+  34,   // Anti-Venom
+  48,   // Atlas
+  135,  // Box IV
+  157,  // Captain Marvel (Carol Danvers)
+  170,  // Chameleon
+  213,  // Deadpool
+  288,  // Gog
+  313,  // Hawkeye (Clint Barton)
+  356,  // Jean Grey
+  361,  // Jessica Jones
+  379,  // Kang
+  577,  // Scarlet Spider
+  581,  // Scorpion (Mac Gargan)
+  614,  // Speedball
+  659,  // Thor (Odinson)
+  687,  // Venom (Eddie Brock)
+  693,  // Vindicator
+  697,  // Vision
+  707,  // Warpath
+])
+
+const DROP_IDS = new Set([
+  // Iteration suffixes conflicting with rescued originals
+  31,   // Ant-Man II  (Scott Lang) — display-name conflict with id 30
+  314,  // Hawkeye II  (Kate Bishop) — display-name conflict with id 313
+  688,  // Venom II    (Angelo Fortunato) — display-name conflict with id 687
+  // Display-name collisions surfaced by Task 3r audit
+  117,  // "Blizzard" duplicate (empty record; id 116 keeps Gregor Shapanka)
+  482,  // "Namor" duplicate (empty record; id 481 keeps Namor McKenzie)
+  497,  // "Nova" (Frankie Raye) — display-name conflict with id 496 (Richard Rider)
+  621,  // "Spider-Man" (Miguel O'Hara / 2099) — conflict with id 620 (Peter Parker)
+  622,  // "Spider-Man" (Miles Morales) — conflict with id 620 (Peter Parker)
+  694,  // "Vindicator" (empty record) — conflict with id 693 (James Hudson)
+])
+
+// --- Category derivation ---
+function deriveCategory(hero) {
+  const groups = hero.connections?.['group-affiliation'] || ''
+  if (/x[- ]?men/i.test(groups)) return 'xmen'
+  if (hero.biography?.alignment === 'bad') return 'villain'
+  return 'hero'
+}
+
+// --- Process-mode branch: skip Phase 1 entirely ---
+if (IS_PROCESS_MODE) {
+  console.log('Phase 3: processing downloaded portraits...')
+  console.log(`  source directory: ${SOURCE_DIR}`)
+
+  const metaPath = resolve(ROOT, 'scripts/heroes-metadata.json')
+  if (!existsSync(metaPath)) {
+    console.error(
+      `Missing ${metaPath}. Run 'npm run fetch-heroes' (no flag) first to do Phase 1.`,
+    )
+    process.exit(1)
+  }
+  const metadata = JSON.parse(readFileSync(metaPath, 'utf8'))
+
+  const PORTRAIT_DIR = resolve(ROOT, 'public/portraits')
+  mkdirSync(PORTRAIT_DIR, { recursive: true })
+
+  const missing = []
+  const encodeErrors = []
+  let encoded = 0
+  for (const hero of metadata) {
+    const srcPath = resolve(SOURCE_DIR, `mm-${hero.id}.jpg`)
+    if (!existsSync(srcPath)) {
+      missing.push({ id: hero.id, name: hero.name })
+      continue
+    }
+    const outPath = resolve(PORTRAIT_DIR, `${hero.id}.webp`)
+    try {
+      await sharp(readFileSync(srcPath))
+        .resize({ width: 512, height: 512, fit: 'cover', position: 'top' })
+        .webp({ quality: 82 })
+        .toFile(outPath)
+      hero.image.url = `/portraits/${hero.id}.webp`
+      encoded++
+      if (encoded % 50 === 0) {
+        process.stdout.write(`\r  encoded ${encoded}/${metadata.length}`)
+      }
+    } catch (e) {
+      encodeErrors.push({ id: hero.id, name: hero.name, error: e.message })
+    }
+  }
+  process.stdout.write('\n')
+  console.log(`  encoded ${encoded} portraits`)
+
+  if (missing.length) {
+    console.log(`  ⚠ ${missing.length} heroes missing their mm-<id>.jpg source file:`)
+    missing.slice(0, 10).forEach(m => console.log(`    id=${m.id} ${m.name}`))
+    if (missing.length > 10) console.log(`    ...and ${missing.length - 10} more`)
+  }
+  if (encodeErrors.length) {
+    console.log(`  ⚠ ${encodeErrors.length} sharp/encode failures:`)
+    encodeErrors.forEach(e => console.log(`    id=${e.id} ${e.name}: ${e.error}`))
+  }
+
+  const final = metadata.filter(
+    h =>
+      !missing.find(m => m.id === h.id) &&
+      !encodeErrors.find(e => e.id === h.id),
+  )
+  const outFile = resolve(ROOT, 'src/data/heroes.json')
+  mkdirSync(dirname(outFile), { recursive: true })
+  writeFileSync(outFile, JSON.stringify(final, null, 2) + '\n')
+  console.log(`  wrote ${final.length} heroes → src/data/heroes.json`)
+
+  // Cleanup — only if we processed everything cleanly
+  if (!missing.length && !encodeErrors.length) {
+    const { unlinkSync } = await import('node:fs')
+    try {
+      unlinkSync(resolve(ROOT, 'scripts/heroes-metadata.json'))
+      unlinkSync(resolve(ROOT, 'scripts/portrait-snippet.js'))
+      for (const h of metadata) {
+        const srcPath = resolve(SOURCE_DIR, `mm-${h.id}.jpg`)
+        try {
+          unlinkSync(srcPath)
+        } catch {}
+      }
+      console.log('  cleaned up intermediate files')
+    } catch (e) {
+      console.log(`  cleanup warning: ${e.message}`)
+    }
+  } else {
+    console.log('  skipping cleanup (some heroes missing or failed)')
+  }
+
+  console.log('\nDone.')
+  process.exit(0)
+}
+
+// --- Phase 1: enumerate API ---
+console.log('Phase 1a: enumerating Superhero API...')
+const all = []
+const fetchErrors = []
+for (let start = 1; start <= MAX_ID; start += BATCH) {
+  const ids = Array.from({ length: BATCH }, (_, i) => start + i).filter(
+    i => i <= MAX_ID,
+  )
+  const results = await Promise.all(
+    ids.map(id => fetchHero(id).then(d => [id, d])),
+  )
+  for (const [id, data] of results) {
+    if (data) all.push(data)
+    else fetchErrors.push(id)
+  }
+  process.stdout.write(`\r  fetched ${all.length} / ${start + BATCH - 1}`)
+  await sleep(SLEEP_MS)
+}
+process.stdout.write('\n')
+if (fetchErrors.length) {
+  console.log(`  ${fetchErrors.length} IDs returned no data`)
+}
+
+// --- Phase 1b: select + dedup + categorize ---
+console.log('Phase 1b: selecting + deduping + categorizing...')
+let selected = all.filter(h => {
+  const idNum = Number(h.id)
+  if (DROP_IDS.has(idNum)) return false
+  const isConfirmed = h.biography?.publisher === 'Marvel Comics'
+  const isRescued = RESCUE_IDS.has(idNum)
+  return isConfirmed || isRescued
+})
+selected = selected.filter(
+  h => h.image?.url && !h.image.url.includes('no-portrait'),
+)
+if (LIMIT) {
+  selected = selected.slice(0, LIMIT)
+  console.log(`  --limit=${LIMIT} → trimmed to ${selected.length}`)
+}
+const categoryCounts = { hero: 0, xmen: 0, villain: 0 }
+for (const hero of selected) {
+  hero.category = deriveCategory(hero)
+  categoryCounts[hero.category]++
+}
+selected.sort((a, b) => Number(a.id) - Number(b.id))
+console.log(`  selected ${selected.length} heroes`)
+console.log(
+  `  categories: hero=${categoryCounts.hero}, xmen=${categoryCounts.xmen}, villain=${categoryCounts.villain}`,
+)
+
+// --- Display-name collision audit ---
+const byName = new Map()
+for (const h of selected) {
+  if (!byName.has(h.name)) byName.set(h.name, [])
+  byName.get(h.name).push(h.id)
+}
+const collisions = [...byName.entries()].filter(([, ids]) => ids.length > 1)
+if (collisions.length) {
+  console.log(
+    `  ⚠ ${collisions.length} display-name collision(s) — consider adding to DROP_IDS:`,
+  )
+  collisions.forEach(([name, ids]) =>
+    console.log(`    "${name}": ${ids.join(', ')}`),
+  )
+}
+
+// --- Phase 1c: write intermediates ---
+console.log('Phase 1c: writing intermediate files...')
+
+// heroes-metadata.json — full hero records, sorted by id
+writeFileSync(
+  resolve(ROOT, 'scripts/heroes-metadata.json'),
+  JSON.stringify(selected, null, 2) + '\n',
+)
+console.log(`  wrote scripts/heroes-metadata.json (${selected.length} heroes)`)
+
+// portrait-snippet.js — browser-console JS that downloads all portraits
+const urls = selected.map(h => ({ id: h.id, url: h.image.url }))
+const snippet = `// Auto-generated by scripts/fetch-heroes.mjs — do not edit by hand.
+// Paste this entire block into the DevTools console on
+// https://www.superherodb.com (after passing the human-check prompt).
+// It fetches ${urls.length} portraits same-origin and saves each to your
+// Downloads folder as mm-<id>.jpg. Chrome will prompt once to allow
+// multiple downloads — click Allow.
+
+(async () => {
+  const urls = ${JSON.stringify(urls, null, 2)}
+  let done = 0
+  const failed = []
+  for (const { id, url } of urls) {
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('HTTP ' + res.status)
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = 'mm-' + id + '.jpg'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(a.href)
+      done++
+      if (done % 20 === 0) console.log('downloaded ' + done + '/' + urls.length)
+      await new Promise(r => setTimeout(r, 50))
+    } catch (e) {
+      failed.push({ id, error: e.message })
+      console.error('failed id=' + id + ':', e.message)
+    }
+  }
+  console.log('Complete: ' + done + ' downloaded, ' + failed.length + ' failed')
+  if (failed.length) console.log('Failed IDs:', failed)
+})()
+`
+writeFileSync(resolve(ROOT, 'scripts/portrait-snippet.js'), snippet)
+console.log(`  wrote scripts/portrait-snippet.js (${urls.length} URLs)`)
+
+// --- Phase 2 instructions ---
+console.log('\n' + '='.repeat(60))
+console.log('NEXT STEP — Phase 2 (manual, in your browser)')
+console.log('='.repeat(60))
+console.log('')
+console.log('1. Open https://www.superherodb.com in a new browser tab.')
+console.log('   Pass any human-check / CAPTCHA if prompted.')
+console.log('2. Open DevTools (Cmd+Opt+I on Mac) → Console tab.')
+console.log('3. Paste the entire contents of scripts/portrait-snippet.js')
+console.log('   into the console and press Enter.')
+console.log('4. Click "Allow" on the browser\'s "multiple downloads" prompt.')
+console.log(`5. Wait for "${urls.length} downloaded" to appear in the console.`)
+console.log('   Files save to ~/Downloads as mm-<id>.jpg')
+console.log('')
+console.log('Then: npm run fetch-heroes -- --process')
+console.log('(Task 5r will implement --process.)')
+console.log('')

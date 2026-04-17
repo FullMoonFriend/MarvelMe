@@ -296,3 +296,51 @@ The implementation plan should sequence roughly:
 6. Update `CLAUDE.md` and `.env.example`.
 7. Manual smoke test (play a few rounds, daily challenge, all categories).
 8. PR.
+
+---
+
+## Addendum (2026-04-16, post-implementation discovery)
+
+### The "server-side fetch works" assumption was wrong
+
+The §Image processing section claimed:
+
+> Server-side fetch; the Cloudflare bot challenge does not apply to direct script requests with a normal `User-Agent`.
+
+During Task 3 implementation we discovered this is **not true**. `superherodb.com` returns `HTTP 403` + `cf-mitigated: challenge` to **all** non-browser requests — curl, Node `fetch`, and third-party image proxies (`images.weserv.nl`) — regardless of `User-Agent`, `Accept`, `sec-ch-ua-*`, or `sec-fetch-*` headers. The detection uses TLS fingerprinting (JA3) and/or JS-challenge cookies (`cf_clearance`) that only a real browser can satisfy.
+
+### Revised portrait pipeline: manual-assisted download
+
+The pipeline splits into two invocations with a browser-based step in the middle:
+
+**Phase 1 — `npm run fetch-heroes` (automated, ~30s)**
+- Enumerate the API (the API endpoint `superheroapi.com` is *not* behind the same bot protection as the CDN — server-side fetch works here).
+- Apply `RESCUE_IDS` / `DROP_IDS` / publisher filter / portrait-presence filter / category derivation.
+- Write `scripts/portrait-snippet.js` — a self-contained JS snippet containing the portrait URLs and download logic.
+- Write `scripts/heroes-metadata.json` — intermediate metadata (gitignored).
+- Print Phase-2 instructions and exit.
+
+**Phase 2 — browser (manual, ~2 minutes)**
+1. Open `https://www.superherodb.com` and pass any human-check (sets `cf_clearance` cookie).
+2. DevTools → Console → paste contents of `scripts/portrait-snippet.js`.
+3. Click "Allow" on Chrome's multiple-downloads prompt.
+4. ~360 files save to `~/Downloads/` as `mm-<id>.jpg`.
+
+The snippet works because `fetch()` from a tab on `superherodb.com` to resources on the same origin carries the `cf_clearance` cookie, which Cloudflare accepts.
+
+**Phase 3 — `npm run fetch-heroes -- --process` (automated, ~30s)**
+- Read `mm-*.jpg` files from `~/Downloads/` (configurable via `--source=<path>`).
+- For each hero in `heroes-metadata.json`, run `sharp` → WebP → `public/portraits/<id>.webp`.
+- Rewrite `image.url` fields and write final `src/data/heroes.json`.
+- Clean up intermediate files.
+
+### Impact on other sections
+
+- **§Image processing** — the "Source" bullet changes from "server-side fetch" to "user's browser after cf_clearance is set". `sharp` transform and output format are unchanged.
+- **§Build script** — behaviour list expanded; the script now has two modes (`--process` flag toggles between them).
+- **§File layout** — adds `scripts/portrait-snippet.js` (build-time only, gitignored), `scripts/heroes-metadata.json` (build-time only, gitignored).
+- **§Non-goals** — no change, but note that Playwright/headless-Chromium automation was considered and rejected in favour of the manual workflow to avoid a 300 MB devDependency.
+
+### Browser compatibility note
+
+Chrome/Edge (Chromium) are known to work. Firefox and Safari may behave differently re. multiple-download prompts; the rehydration snippet uses widely-supported APIs (`fetch`, `Blob`, `URL.createObjectURL`, `<a download>`), so they *should* work, but haven't been tested. Recommend using Chrome for the Phase 2 step.

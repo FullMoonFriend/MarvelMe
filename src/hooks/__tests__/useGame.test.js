@@ -2,28 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useGame, ROUNDS } from '../useGame'
 
-// Mock searchHero to avoid real API calls
-vi.mock('../../services/superheroApi', () => ({
-  searchHero: vi.fn(),
-}))
-
-import { searchHero } from '../../services/superheroApi'
-
-function makeHero(name) {
-  return {
-    name,
-    image: { url: `https://example.com/${name}.jpg` },
-    biography: { 'full-name': `${name} Real`, 'first-appearance': 'Comic #1' },
-    powerstats: { intelligence: 80, strength: 70, speed: 60, durability: 50, power: 90, combat: 75 },
-    work: { occupation: 'Hero', base: 'NYC' },
-    appearance: { gender: 'Male', race: 'Human', height: ["6'0", '183 cm'], 'hair-color': 'Black', 'eye-color': 'Blue' },
-  }
-}
-
 describe('useGame', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    searchHero.mockImplementation((name) => Promise.resolve(makeHero(name)))
   })
 
   it('starts with welcome phase and default state', () => {
@@ -233,16 +214,15 @@ describe('useGame', () => {
     expect(result.current.maxStreak).toBe(2) // Max preserved
   })
 
-  it('startGame reverts to welcome with error on loadRound failure', async () => {
-    searchHero.mockRejectedValue(new Error('Network error'))
-
+  it('startGame successfully loads with bundled hero data', async () => {
     const { result } = renderHook(() => useGame())
 
     await act(async () => {
       await result.current.startGame(null)
     })
 
-    expect(result.current.phase).toBe('welcome')
-    expect(result.current.error).toBe('Failed to load heroes. Check your connection and try again.')
+    expect(result.current.phase).toBe('playing')
+    expect(result.current.currentHero).not.toBeNull()
+    expect(result.current.options).toHaveLength(4)
   })
 })

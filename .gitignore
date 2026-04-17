@@ -21,6 +21,8 @@ dist-ssr
 scripts/full-universe.json
 scripts/marvel-catalog.json
 scripts/rescue-candidates.json
+scripts/portrait-snippet.js
+scripts/heroes-metadata.json
 
 # Editor directories and files
 .vscode/*

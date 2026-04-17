@@ -14,7 +14,7 @@ import ResultScreen from './components/ResultScreen'
  *
  * - 'welcome'  → WelcomeScreen
  * - 'gameover' → ResultScreen
- * - all others → GameBoard (handles 'loading', 'playing', 'revealed' internally)
+ * - all others → GameBoard (handles 'playing' and 'revealed' internally)
  */
 export default function App() {
   const game = useGame()
@@ -31,7 +31,7 @@ export default function App() {
   }
 
   if (game.phase === 'welcome') {
-    return <WelcomeScreen onStart={game.startGame} error={game.error} />
+    return <WelcomeScreen onStart={game.startGame} />
   }
 
   if (game.phase === 'gameover') {

@@ -64,7 +64,7 @@ export default function App() {
     }
     const globalCtx = { collectionSize, dailiesCompleted: 0, dailyStreak: 0 }
     const unlocked = checkGameOver(gameCtx, globalCtx)
-    if (unlocked.length) setNewlyUnlocked(unlocked)
+    if (unlocked.length) setNewlyUnlocked(unlocked) // eslint-disable-line react-hooks/set-state-in-effect
   }, [game.phase, game.history, game.score, game.maxStreak, collectionSize, checkGameOver])
 
   useEffect(() => {

@@ -85,7 +85,7 @@ export function playCorrect() {
     playTone(659, now + 0.1, 0.12, 0.3, c)   // E5
     playTone(784, now + 0.2, 0.12, 0.3, c)   // G5
     playTone(1047, now + 0.3, 0.25, 0.35, c) // C6
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**
@@ -99,7 +99,7 @@ export function playWrong() {
     const now = c.currentTime
     playTone(110, now, 0.2, 0.4, c)         // A2
     playTone(87, now + 0.15, 0.35, 0.35, c) // F2
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**
@@ -111,7 +111,7 @@ export function playHint() {
   try {
     const c = getCtx()
     playTone(440, c.currentTime, 0.08, 0.15, c)
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**
@@ -126,7 +126,7 @@ export function playGameOver() {
     playTone(392, now, 0.15, 0.3, c)         // G4
     playTone(523, now + 0.12, 0.15, 0.3, c)  // C5
     playTone(659, now + 0.24, 0.3, 0.3, c)   // E5
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**
@@ -150,7 +150,7 @@ export function playIntroImpact() {
     osc.stop(now + 0.6)
     playTone(2500, now, 0.08, 0.2, c)
     playTone(3200, now + 0.02, 0.06, 0.15, c)
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**
@@ -165,7 +165,7 @@ export function playAchievement() {
     playTone(880, now, 0.1, 0.2, c)
     playTone(1109, now + 0.08, 0.1, 0.2, c)
     playTone(1319, now + 0.16, 0.2, 0.25, c)
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**
@@ -183,7 +183,7 @@ export function playThemeUnlock() {
     playTone(1319, now + 0.16, 0.25, 0.25, c)
     playTone(220, now + 0.1, 0.5, 0.15, c)
     playTone(277, now + 0.1, 0.5, 0.12, c)
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**
@@ -195,7 +195,7 @@ export function playCollectionNew() {
   try {
     const c = getCtx()
     playTone(1200, c.currentTime, 0.1, 0.1, c)
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**
@@ -207,7 +207,7 @@ export function playRoundWipe() {
   try {
     const c = getCtx()
     playNoise(c.currentTime, 0.3, 0.12, c)
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**

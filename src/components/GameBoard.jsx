@@ -8,7 +8,7 @@ import AchievementToast from './AchievementToast'
 import { playHint, playGameOver } from '../services/sounds'
 import { POINTS } from '../hooks/useGame'
 
-export default function GameBoard({ game, muted, onToggleMute, collection, achievements, onRevealComplete }) {
+export default function GameBoard({ game, muted, onToggleMute, achievements, onRevealComplete }) {
   const {
     phase,
     round,
@@ -158,7 +158,6 @@ export default function GameBoard({ game, muted, onToggleMute, collection, achie
             <AnswerOptions
               options={options}
               onSelect={handleSelect}
-              result={result}
               correctName={currentHero.name}
               disabled={true}
             />
@@ -169,7 +168,6 @@ export default function GameBoard({ game, muted, onToggleMute, collection, achie
           <AnswerOptions
             options={options}
             onSelect={handleSelect}
-            result={result}
             correctName={currentHero.name}
             disabled={false}
           />

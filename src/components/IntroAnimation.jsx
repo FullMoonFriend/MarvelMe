@@ -1,23 +1,28 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import heroesData from '../data/heroes.json'
 import { playIntroImpact } from '../services/sounds'
 
 const GRID_SIZE = 24
 const SESSION_KEY = 'marvelme-intro-played'
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function shouldShowIntro() {
   return !sessionStorage.getItem(SESSION_KEY)
+}
+
+function shufflePortraits() {
+  const out = [...heroesData]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]]
+  }
+  return out.slice(0, GRID_SIZE).map(h => h.image?.url)
 }
 
 export default function IntroAnimation({ onComplete }) {
   const [phase, setPhase] = useState('grid')
   const [showSkip, setShowSkip] = useState(false)
-  const portraits = useRef(
-    heroesData
-      .sort(() => Math.random() - 0.5)
-      .slice(0, GRID_SIZE)
-      .map(h => h.image?.url)
-  )
+  const [portraits] = useState(shufflePortraits)
 
   useEffect(() => {
     const skipTimer = setTimeout(() => setShowSkip(true), 1000)
@@ -50,7 +55,7 @@ export default function IntroAnimation({ onComplete }) {
       <div className={`absolute inset-0 grid grid-cols-6 grid-rows-4 gap-0.5 p-1
         transition-all duration-700
         ${phase === 'grid' ? 'opacity-70 scale-100' : 'opacity-0 scale-75'}`}>
-        {portraits.current.map((url, i) => (
+        {portraits.map((url, i) => (
           <div key={i} className="overflow-hidden">
             <img
               src={url}

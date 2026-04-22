@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react'
 
-export default function AnswerOptions({ options, onSelect, result, correctName, disabled }) {
+export default function AnswerOptions({ options, onSelect, correctName, disabled }) {
   return (
     <div className="w-full max-w-sm mx-auto mt-6 grid grid-cols-2 gap-3" role="group" aria-label="Answer choices">
       {options.map((option) => {

@@ -30,7 +30,7 @@ export function useTheme() {
     applyTheme(id)
     try {
       localStorage.setItem(KEY, id)
-    } catch {}
+    } catch { /* ignored */ }
   }, [])
 
   return { activeTheme, setTheme }

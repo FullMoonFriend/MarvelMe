@@ -15,7 +15,7 @@ function load() {
 function save(set) {
   try {
     localStorage.setItem(KEY, JSON.stringify([...set]))
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 export function useCollection() {

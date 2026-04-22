@@ -14,7 +14,7 @@ function load() {
 function save(data) {
   try {
     localStorage.setItem(KEY, JSON.stringify(data))
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 export function useAchievements() {

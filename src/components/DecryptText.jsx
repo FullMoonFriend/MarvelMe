@@ -6,7 +6,7 @@ export default function DecryptText({ text, duration = 300, className = '' }) {
   const [display, setDisplay] = useState('')
 
   useEffect(() => {
-    if (!text) { setDisplay(''); return }
+    if (!text) { setDisplay(''); return } // eslint-disable-line react-hooks/set-state-in-effect
     const start = performance.now()
     let frame
     function tick(now) {

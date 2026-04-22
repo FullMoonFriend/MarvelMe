@@ -35,7 +35,7 @@ function getDailyLabel() {
  * @param {(category: string|null, options?: { daily?: boolean }) => void} props.onStart
  *   Called with the selected category and options when the player starts.
  */
-export default function WelcomeScreen({ onStart, error }) {
+export default function WelcomeScreen({ onStart, error, onTrophies, onCollection, collectionSize, unlockedCount }) {
   const [category, setCategory] = useState(null)
   const { todayRecord } = useDailyChallenge()
 
@@ -149,6 +149,28 @@ export default function WelcomeScreen({ onStart, error }) {
           ⚡ DAILY CHALLENGE · {getDailyLabel()}
         </button>
       )}
+
+      {/* Navigation buttons */}
+      <div className="mt-6 flex gap-3">
+        <button
+          onClick={onTrophies}
+          className="font-bangers tracking-wider px-5 py-2 rounded-xl
+            border-2 border-[#f5c518]/40 text-[#f5c518]/70
+            hover:border-[#f5c518] hover:text-[#f5c518]
+            active:scale-95 transition-all duration-150"
+        >
+          🏆 TROPHIES {unlockedCount > 0 && <span className="text-xs">({unlockedCount})</span>}
+        </button>
+        <button
+          onClick={onCollection}
+          className="font-bangers tracking-wider px-5 py-2 rounded-xl
+            border-2 border-[#ed1d24]/40 text-[#ed1d24]/70
+            hover:border-[#ed1d24] hover:text-[#ed1d24]
+            active:scale-95 transition-all duration-150"
+        >
+          📚 COLLECTION {collectionSize > 0 && <span className="text-xs">({collectionSize})</span>}
+        </button>
+      </div>
 
       <p className="mt-6 text-xs text-gray-600">
         Powered by superheroapi.com

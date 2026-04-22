@@ -42,7 +42,38 @@ function playTone(frequency, startTime, duration, gain, audioCtx) {
 }
 
 /**
- * Plays a two-note ascending chime (C5 → E5) to signal a correct answer.
+ * Schedules a band-passed white-noise burst.
+ * The filter sweeps from 200 Hz to 4 kHz over the duration for a whoosh effect.
+ *
+ * @param {number} startTime - AudioContext time (seconds) when the noise begins.
+ * @param {number} duration  - Length of the burst in seconds.
+ * @param {number} gain      - Initial gain amplitude (0–1).
+ * @param {AudioContext} audioCtx - The AudioContext to schedule on.
+ */
+function playNoise(startTime, duration, gain, audioCtx) {
+  const bufferSize = audioCtx.sampleRate * duration
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+  const source = audioCtx.createBufferSource()
+  source.buffer = buffer
+  const bandpass = audioCtx.createBiquadFilter()
+  bandpass.type = 'bandpass'
+  bandpass.frequency.setValueAtTime(200, startTime)
+  bandpass.frequency.exponentialRampToValueAtTime(4000, startTime + duration)
+  bandpass.Q.value = 1.5
+  const gainNode = audioCtx.createGain()
+  gainNode.gain.setValueAtTime(gain, startTime)
+  gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration)
+  source.connect(bandpass)
+  bandpass.connect(gainNode)
+  gainNode.connect(audioCtx.destination)
+  source.start(startTime)
+  source.stop(startTime + duration)
+}
+
+/**
+ * Plays a four-note ascending reveal sting (C5 → E5 → G5 → C6) for a correct answer.
  * No-op when muted.
  */
 export function playCorrect() {
@@ -50,13 +81,15 @@ export function playCorrect() {
   try {
     const c = getCtx()
     const now = c.currentTime
-    playTone(523, now, 0.15, 0.3, c)        // C5
-    playTone(659, now + 0.1, 0.2, 0.3, c)   // E5
-  } catch {}
+    playTone(523, now, 0.12, 0.3, c)         // C5
+    playTone(659, now + 0.1, 0.12, 0.3, c)   // E5
+    playTone(784, now + 0.2, 0.12, 0.3, c)   // G5
+    playTone(1047, now + 0.3, 0.25, 0.35, c) // C6
+  } catch { /* ignored */ }
 }
 
 /**
- * Plays a two-note descending thud to signal a wrong answer.
+ * Plays a two-note descending rumble to signal a wrong answer.
  * No-op when muted.
  */
 export function playWrong() {
@@ -64,9 +97,9 @@ export function playWrong() {
   try {
     const c = getCtx()
     const now = c.currentTime
-    playTone(220, now, 0.1, 0.3, c)
-    playTone(160, now + 0.1, 0.25, 0.3, c)
-  } catch {}
+    playTone(110, now, 0.2, 0.4, c)         // A2
+    playTone(87, now + 0.15, 0.35, 0.35, c) // F2
+  } catch { /* ignored */ }
 }
 
 /**
@@ -78,7 +111,7 @@ export function playHint() {
   try {
     const c = getCtx()
     playTone(440, c.currentTime, 0.08, 0.15, c)
-  } catch {}
+  } catch { /* ignored */ }
 }
 
 /**
@@ -93,7 +126,88 @@ export function playGameOver() {
     playTone(392, now, 0.15, 0.3, c)         // G4
     playTone(523, now + 0.12, 0.15, 0.3, c)  // C5
     playTone(659, now + 0.24, 0.3, 0.3, c)   // E5
-  } catch {}
+  } catch { /* ignored */ }
+}
+
+/**
+ * Plays a cinematic impact boom with high-frequency transient stabs.
+ * Intended for welcome-screen entry or dramatic reveals.
+ * No-op when muted.
+ */
+export function playIntroImpact() {
+  if (_muted) return
+  try {
+    const c = getCtx()
+    const now = c.currentTime
+    const osc = c.createOscillator()
+    const g = c.createGain()
+    osc.connect(g)
+    g.connect(c.destination)
+    osc.frequency.value = 60
+    g.gain.setValueAtTime(0.5, now)
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.6)
+    osc.start(now)
+    osc.stop(now + 0.6)
+    playTone(2500, now, 0.08, 0.2, c)
+    playTone(3200, now + 0.02, 0.06, 0.15, c)
+  } catch { /* ignored */ }
+}
+
+/**
+ * Plays a short three-note ascending chime to celebrate an achievement.
+ * No-op when muted.
+ */
+export function playAchievement() {
+  if (_muted) return
+  try {
+    const c = getCtx()
+    const now = c.currentTime
+    playTone(880, now, 0.1, 0.2, c)
+    playTone(1109, now + 0.08, 0.1, 0.2, c)
+    playTone(1319, now + 0.16, 0.2, 0.25, c)
+  } catch { /* ignored */ }
+}
+
+/**
+ * Plays an unlock flourish combining a high arpeggio with low bass tones.
+ * Used when a new theme or cosmetic is unlocked.
+ * No-op when muted.
+ */
+export function playThemeUnlock() {
+  if (_muted) return
+  try {
+    const c = getCtx()
+    const now = c.currentTime
+    playTone(880, now, 0.1, 0.2, c)
+    playTone(1109, now + 0.08, 0.1, 0.2, c)
+    playTone(1319, now + 0.16, 0.25, 0.25, c)
+    playTone(220, now + 0.1, 0.5, 0.15, c)
+    playTone(277, now + 0.1, 0.5, 0.12, c)
+  } catch { /* ignored */ }
+}
+
+/**
+ * Plays a quick high-pitched ping to signal a new collection item.
+ * No-op when muted.
+ */
+export function playCollectionNew() {
+  if (_muted) return
+  try {
+    const c = getCtx()
+    playTone(1200, c.currentTime, 0.1, 0.1, c)
+  } catch { /* ignored */ }
+}
+
+/**
+ * Plays a short noise whoosh for round-transition wipes.
+ * No-op when muted.
+ */
+export function playRoundWipe() {
+  if (_muted) return
+  try {
+    const c = getCtx()
+    playNoise(c.currentTime, 0.3, 0.12, c)
+  } catch { /* ignored */ }
 }
 
 /**

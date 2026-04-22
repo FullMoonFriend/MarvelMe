@@ -1,69 +1,81 @@
-import { playCorrect, playWrong } from '../services/sounds'
+import { useRef, useCallback } from 'react'
 
-/**
- * Renders a 2×2 grid of hero portrait buttons for the player to choose from.
- *
- * During the 'playing' phase buttons are interactive and play a sound on click.
- * After an answer is submitted (`disabled` = true) the correct option is
- * highlighted in green and all wrong options are dimmed.
- *
- * @param {object}   props
- * @param {Array<{name: string, image: {url: string}}>} props.options
- *   The four answer choices to display.
- * @param {(name: string) => void} props.onSelect
- *   Callback invoked with the chosen hero name when a button is clicked.
- * @param {'correct'|'wrong'|null} props.result
- *   Current answer result — unused visually here but available for extension.
- * @param {string}  props.correctName - Name of the correct hero for this round.
- * @param {boolean} props.disabled    - True once an answer has been submitted.
- */
-export default function AnswerOptions({ options, onSelect, result, correctName, disabled }) {
+export default function AnswerOptions({ options, onSelect, correctName, disabled }) {
   return (
     <div className="w-full max-w-sm mx-auto mt-6 grid grid-cols-2 gap-3" role="group" aria-label="Answer choices">
       {options.map((option) => {
         const isCorrect = option.name === correctName
-
-        let borderStyle = 'border-[#2a2a2a] hover:border-[#ed1d24]'
-        let overlayStyle = ''
-
-        if (disabled) {
-          if (isCorrect) {
-            borderStyle = 'border-green-500 scale-105'
-          } else {
-            borderStyle = 'border-[#2a2a2a] opacity-50'
-          }
-        }
-
         return (
-          <button
+          <OptionButton
             key={option.name}
-            onClick={() => {
-              if (!disabled) {
-                isCorrect ? playCorrect() : playWrong()
-                onSelect(option.name)
-              }
-            }}
+            option={option}
+            isCorrect={isCorrect}
             disabled={disabled}
-            className={`border-2 rounded-xl overflow-hidden transition-all duration-200
-              bg-[#1a1a1a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f5c518]
-              ${borderStyle}
-              ${!disabled ? 'cursor-pointer active:scale-95' : 'cursor-default'}
-              ${overlayStyle}
-            `}
-          >
-            <img
-              src={option.image?.url}
-              alt={option.name}
-              className="w-full aspect-square object-cover object-top"
-            />
-            <p className="text-sm font-semibold text-center text-white pt-2 pb-2 px-1 leading-tight">
-              {disabled && isCorrect && <span aria-hidden="true">&#x2714; </span>}
-              {disabled && !isCorrect && <span aria-hidden="true">&#x2718; </span>}
-              {option.name}
-            </p>
-          </button>
+            onSelect={onSelect}
+          />
         )
       })}
     </div>
+  )
+}
+
+function OptionButton({ option, isCorrect, disabled, onSelect }) {
+  const btnRef = useRef(null)
+  const rippleRef = useRef(null)
+
+  const handleClick = useCallback((e) => {
+    if (disabled) return
+
+    const btn = btnRef.current
+    const ripple = rippleRef.current
+    if (btn && ripple) {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      ripple.style.left = `${x}px`
+      ripple.style.top = `${y}px`
+      ripple.classList.remove('animate-[ripple_0.5s_ease-out]')
+      void ripple.offsetWidth
+      ripple.classList.add('animate-[ripple_0.5s_ease-out]')
+    }
+
+    onSelect(option.name)
+  }, [disabled, onSelect, option.name])
+
+  let borderStyle = 'border-[#2a2a2a]'
+  if (disabled) {
+    borderStyle = isCorrect ? 'border-green-500 scale-105' : 'border-[#2a2a2a] opacity-50'
+  }
+
+  return (
+    <button
+      ref={btnRef}
+      onClick={handleClick}
+      disabled={disabled}
+      className={`relative border-2 rounded-xl overflow-hidden transition-all duration-200
+        bg-[#1a1a1a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f5c518]
+        ${borderStyle}
+        ${!disabled
+          ? 'cursor-pointer active:scale-95 hover:-translate-y-1 hover:shadow-[0_4px_16px_rgba(237,29,36,0.3)] hover:border-[#ed1d24] animate-breathe'
+          : 'cursor-default'
+        }`}
+    >
+      <img
+        src={option.image?.url}
+        alt={option.name}
+        className="w-full aspect-square object-cover object-top"
+      />
+      <p className="text-sm font-semibold text-center text-white pt-2 pb-2 px-1 leading-tight">
+        {disabled && isCorrect && <span aria-hidden="true">&#x2714; </span>}
+        {disabled && !isCorrect && <span aria-hidden="true">&#x2718; </span>}
+        {option.name}
+      </p>
+      <span
+        ref={rippleRef}
+        className="absolute w-0 h-0 rounded-full bg-white/20 pointer-events-none
+          -translate-x-1/2 -translate-y-1/2"
+        style={{ opacity: 0 }}
+      />
+    </button>
   )
 }

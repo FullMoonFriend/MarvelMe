@@ -1,3 +1,5 @@
+import RollingNumber from './RollingNumber'
+
 /**
  * Sticky top bar displayed throughout a game session.
  *
@@ -34,7 +36,10 @@ export default function ScoreBar({ round, score, ROUNDS, streak, muted, onToggle
           <div className="flex-1 h-2 bg-[#2a2a2a] rounded-full overflow-hidden">
             <div
               className="h-full bg-[#ed1d24] rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
+              style={{
+                width: `${progress}%`,
+                boxShadow: progress > 0 ? '0 0 8px rgba(237, 29, 36, 0.6)' : 'none',
+              }}
             />
           </div>
         </div>
@@ -42,13 +47,16 @@ export default function ScoreBar({ round, score, ROUNDS, streak, muted, onToggle
         {/* Score + streak + mute */}
         <div className="flex items-center gap-2">
           {streak >= 2 && (
-            <span className="font-bangers text-lg text-orange-400 leading-none">
-              🔥{streak}
+            <span className={`font-bangers text-lg leading-none
+              ${streak >= 7 ? 'text-red-400 animate-shimmer' : streak >= 5 ? 'text-orange-300' : 'text-orange-400'}`}>
+              🔥<RollingNumber value={streak} duration={200} />
             </span>
           )}
           <div className="text-right" aria-live="polite">
             <span className="text-xs text-gray-400">Score</span>
-            <div className="font-bangers text-2xl text-[#f5c518] leading-none">{score}</div>
+            <div className="font-bangers text-2xl text-[#f5c518] leading-none">
+              <RollingNumber value={score} />
+            </div>
           </div>
           <button
             onClick={onToggleMute}

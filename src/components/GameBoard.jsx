@@ -1,26 +1,14 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import ScoreBar from './ScoreBar'
 import HintPanel from './HintPanel'
 import AnswerOptions from './AnswerOptions'
-import { playHint, playCorrect, playWrong, playGameOver } from '../services/sounds'
+import HeroReveal from './HeroReveal'
+import RoundWipe from './RoundWipe'
+import AchievementToast from './AchievementToast'
+import { playHint, playGameOver } from '../services/sounds'
+import { POINTS } from '../hooks/useGame'
 
-/**
- * Main game screen rendered during the 'playing' and 'revealed' phases.
- *
- * Renders the game layout containing:
- * - ScoreBar (always visible)
- * - Points-remaining indicator
- * - HintPanel (clues + optional hints)
- * - Result banner (shown after the player answers)
- * - AnswerOptions (the 4 portrait buttons)
- * - Hint button or Next-round button
- *
- * @param {object}   props
- * @param {object}   props.game          - Full state + actions object from `useGame`.
- * @param {boolean}  props.muted         - Whether sound effects are muted.
- * @param {() => void} props.onToggleMute - Callback to toggle the mute state.
- */
-export default function GameBoard({ game, muted, onToggleMute }) {
+export default function GameBoard({ game, muted, onToggleMute, achievements, onRevealComplete }) {
   const {
     phase,
     round,
@@ -33,21 +21,67 @@ export default function GameBoard({ game, muted, onToggleMute }) {
     ROUNDS,
     useHint: revealHint,
     submitAnswer,
+    completeReveal,
     nextRound,
   } = game
 
+  const [showWipe, setShowWipe] = useState(false)
+  const [pendingNext, setPendingNext] = useState(null)
+  const [toastQueue, setToastQueue] = useState([])
+  const [selectedName, setSelectedName] = useState(null)
+  const [prevStreak, setPrevStreak] = useState(0)
+
   const isRevealed = phase === 'revealed'
+  const isRevealing = phase === 'revealing'
   const canHint = phase === 'playing' && hintsUsed < 3
+
+  const handleSelect = useCallback((name) => {
+    if (phase !== 'playing') return
+    setSelectedName(name)
+    setPrevStreak(streak)
+    submitAnswer(name)
+  }, [phase, streak, submitAnswer])
+
+  const handleRevealComplete = useCallback(() => {
+    completeReveal()
+    if (onRevealComplete) onRevealComplete(selectedName)
+  }, [completeReveal, onRevealComplete, selectedName])
+
+  const handleNextRound = useCallback(() => {
+    if (round >= ROUNDS) {
+      playGameOver()
+      nextRound(round, score)
+      return
+    }
+    setShowWipe(true)
+    setPendingNext({ round, score })
+  }, [round, score, ROUNDS, nextRound])
+
+  const handleWipeComplete = useCallback(() => {
+    setShowWipe(false)
+    if (pendingNext) {
+      nextRound(pendingNext.round, pendingNext.score)
+      setPendingNext(null)
+      setSelectedName(null)
+    }
+  }, [pendingNext, nextRound])
+
+  const handleToastDone = useCallback(() => {
+    setToastQueue(q => q.slice(1))
+  }, [])
+
+  useEffect(() => {
+    if (achievements?.newlyUnlocked?.length) {
+      setToastQueue(q => [...q, ...achievements.newlyUnlocked])
+    }
+  }, [achievements?.newlyUnlocked])
 
   useEffect(() => {
     function handleKeyDown(e) {
       if (phase === 'playing') {
         const idx = parseInt(e.key, 10) - 1
         if (idx >= 0 && idx < options.length) {
-          const name = options[idx].name
-          const isCorrect = name === currentHero?.name
-          isCorrect ? playCorrect() : playWrong()
-          submitAnswer(name)
+          handleSelect(options[idx].name)
           return
         }
         if (e.key.toLowerCase() === 'h' && hintsUsed < 3) {
@@ -57,20 +91,20 @@ export default function GameBoard({ game, muted, onToggleMute }) {
         }
       }
       if (phase === 'revealed' && e.key === 'Enter') {
-        if (round >= ROUNDS) playGameOver()
-        nextRound(round, score)
+        handleNextRound()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [phase, options, currentHero, hintsUsed, round, score, ROUNDS, submitAnswer, revealHint, nextRound])
+  }, [phase, options, hintsUsed, handleSelect, revealHint, handleNextRound])
+
+  const pointsEarned = result === 'correct' ? POINTS[Math.min(hintsUsed, 3)] : 0
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0f0f0f]">
       <ScoreBar round={round} score={score} ROUNDS={ROUNDS} streak={streak} muted={muted} onToggleMute={onToggleMute} />
 
-      <main key={round} className="flex-1 flex flex-col items-center px-4 pt-6 pb-10 animate-fadeIn">
-        {/* Points indicator */}
+      <main key={isRevealing ? `reveal-${round}` : round} className="flex-1 flex flex-col items-center px-4 pt-6 pb-10 animate-fadeIn">
         <div className="mb-4 flex items-center gap-2">
           <span className="text-gray-500 text-xs">Potential points:</span>
           <div className="flex gap-1">
@@ -92,36 +126,55 @@ export default function GameBoard({ game, muted, onToggleMute }) {
           </div>
         </div>
 
-        {/* Hint panel — always visible */}
         <HintPanel hero={currentHero} hintsUsed={hintsUsed} />
 
-        {/* Reveal result banner */}
-        {isRevealed && (
-          <div className={`mt-4 px-6 py-2 rounded-full font-bangers text-xl tracking-widest animate-pop
-            ${result === 'correct'
-              ? 'bg-green-900/50 border border-green-500 text-green-300'
-              : 'bg-red-900/30 border border-red-800 text-red-400'
-            }`}
-          >
-            {result === 'correct'
-              ? `CORRECT! +${[3,2,1,0][Math.min(hintsUsed,3)]} PTS`
-              : `WRONG — It was ${currentHero.name}`
-            }
-          </div>
+        {isRevealing && (
+          <HeroReveal
+            result={result}
+            correctHero={currentHero}
+            selectedName={selectedName}
+            options={options}
+            pointsEarned={pointsEarned}
+            streak={streak}
+            prevStreak={prevStreak}
+            onComplete={handleRevealComplete}
+          />
         )}
 
-        {/* Answer options */}
-        <AnswerOptions
-          options={options}
-          onSelect={submitAnswer}
-          result={result}
-          correctName={currentHero.name}
-          disabled={isRevealed}
-        />
+        {isRevealed && (
+          <>
+            <div className={`mt-4 px-6 py-2 rounded-full font-bangers text-xl tracking-widest animate-pop
+              ${result === 'correct'
+                ? 'bg-green-900/50 border border-green-500 text-green-300'
+                : 'bg-red-900/30 border border-red-800 text-red-400'
+              }`}
+            >
+              {result === 'correct'
+                ? `CORRECT! +${pointsEarned} PTS`
+                : `WRONG — It was ${currentHero.name}`
+              }
+            </div>
 
-        {/* Hint button or Next button */}
+            <AnswerOptions
+              options={options}
+              onSelect={handleSelect}
+              correctName={currentHero.name}
+              disabled={true}
+            />
+          </>
+        )}
+
+        {phase === 'playing' && (
+          <AnswerOptions
+            options={options}
+            onSelect={handleSelect}
+            correctName={currentHero.name}
+            disabled={false}
+          />
+        )}
+
         <div className="mt-6 flex gap-3">
-          {!isRevealed && (
+          {phase === 'playing' && (
             <button
               onClick={() => { playHint(); revealHint() }}
               disabled={!canHint}
@@ -139,10 +192,7 @@ export default function GameBoard({ game, muted, onToggleMute }) {
 
           {isRevealed && (
             <button
-              onClick={() => {
-                if (round >= ROUNDS) playGameOver()
-                nextRound(round, score)
-              }}
+              onClick={handleNextRound}
               className="font-bangers text-2xl tracking-widest px-10 py-3 rounded-xl
                 bg-[#ed1d24] hover:bg-[#ff2d35] active:scale-95
                 text-white shadow-[0_0_16px_rgba(237,29,36,0.4)]
@@ -153,6 +203,14 @@ export default function GameBoard({ game, muted, onToggleMute }) {
           )}
         </div>
       </main>
+
+      {showWipe && (
+        <RoundWipe category={currentHero?.category} onComplete={handleWipeComplete} />
+      )}
+
+      {toastQueue.length > 0 && (
+        <AchievementToast achievement={toastQueue[0]} onDone={handleToastDone} />
+      )}
     </div>
   )
 }

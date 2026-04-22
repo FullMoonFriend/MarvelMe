@@ -214,15 +214,36 @@ describe('useGame', () => {
     expect(result.current.maxStreak).toBe(2) // Max preserved
   })
 
-  it('startGame successfully loads with bundled hero data', async () => {
+  it('correct answer with 3 hints awards 0 points', async () => {
     const { result } = renderHook(() => useGame())
 
     await act(async () => {
       await result.current.startGame(null)
     })
 
-    expect(result.current.phase).toBe('playing')
-    expect(result.current.currentHero).not.toBeNull()
-    expect(result.current.options).toHaveLength(4)
+    act(() => result.current.useHint())
+    act(() => result.current.useHint())
+    act(() => result.current.useHint())
+
+    const correctName = result.current.currentHero.name
+    act(() => result.current.submitAnswer(correctName))
+
+    expect(result.current.result).toBe('correct')
+    expect(result.current.score).toBe(0)
+  })
+
+  it('daily challenge produces deterministic hero sequence', async () => {
+    const { result: run1 } = renderHook(() => useGame())
+    const { result: run2 } = renderHook(() => useGame())
+
+    await act(async () => {
+      await run1.current.startGame(null, { daily: true })
+    })
+    await act(async () => {
+      await run2.current.startGame(null, { daily: true })
+    })
+
+    expect(run1.current.currentHero.name).toBe(run2.current.currentHero.name)
+    expect(run1.current.isDailyChallenge).toBe(true)
   })
 })

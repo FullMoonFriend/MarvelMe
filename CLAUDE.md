@@ -11,6 +11,7 @@ npm run preview        # Preview production build
 npm run lint           # Run ESLint
 npm test               # Run the vitest test suite once
 npm run test:watch     # Run vitest in watch mode
+npx vitest run src/hooks/__tests__/useGame.test.js  # Run a single test file
 npm run fetch-heroes   # Regenerate src/data/heroes.json + public/portraits/ (build-time only)
 ```
 
@@ -23,8 +24,8 @@ The runtime app needs **no environment variables** — hero data and portraits a
 ## Tech Stack
 
 - **React 19** — UI components, no router library (manual phase-switching in App.jsx)
-- **Vite 7** — Dev server + build tool
-- **Tailwind CSS v4** — Utility classes; custom tokens declared in `tailwind.config.js`
+- **Vite 7** — Dev server + build tool; Vitest configured in `vite.config.js` (no separate vitest config)
+- **Tailwind CSS v4** — Utility classes via `@tailwindcss/vite` plugin; tokens declared in `src/index.css` using `@theme {}` (v4 CSS-first config). A legacy `tailwind.config.js` also exists with duplicated tokens.
 - **ESLint 9** — Flat config format (`eslint.config.js`)
 - **Vitest 4** + **@testing-library/react** — Tests under `src/**/__tests__/*.test.js`
 - **Web Audio API** — Sound effects synthesised in code, no audio files
@@ -163,7 +164,7 @@ The share button copies an emoji summary to the clipboard.
 
 ## Styling
 
-Tailwind CSS v4. Custom theme tokens are defined in `tailwind.config.js` (not in `index.css`):
+Tailwind CSS v4. Custom theme tokens are defined in `src/index.css` via the `@theme {}` block (the v4 CSS-first approach). A `tailwind.config.js` also exists with duplicated definitions — treat `src/index.css` as the source of truth for tokens.
 
 **Colours:**
 - `marvel-red: #ed1d24` — primary brand red
@@ -175,40 +176,9 @@ Tailwind CSS v4. Custom theme tokens are defined in `tailwind.config.js` (not in
 
 **Typography:** `font-bangers` (Bangers from Google Fonts, preloaded in `index.html`) for titles; Inter for body text.
 
-**Animations** (defined in `src/index.css`):
+**Animations** (defined in `src/index.css` — both `@theme` shorthand and `@keyframes`):
 - `animate-shimmer` — 2s red ↔ gold pulsing glow on CTA buttons
 - `animate-fadeIn` — 0.4s slide-up fade used for hint reveals
 - `animate-pop` — 0.3s scale pop for result banners
 
 **Convention:** Use `bg-[#hex]` inline values for one-off colours rather than adding new theme tokens.
-
-## File Reference
-
-```
-src/
-  main.jsx                    # React root mount
-  App.jsx                     # Phase router, mute state owner
-  index.css                   # Global styles, @keyframes, Tailwind base
-  components/
-    WelcomeScreen.jsx
-    GameBoard.jsx
-    ScoreBar.jsx
-    HintPanel.jsx
-    AnswerOptions.jsx
-    ResultScreen.jsx
-  hooks/
-    useGame.js                # Core state machine (synchronous, reads heroes.json)
-    useHighScore.js           # localStorage best score/streak
-  services/
-    sounds.js                 # Web Audio synthesis + mute toggle
-  data/
-    heroes.json               # ~344 Marvel heroes, pre-fetched at build time
-  test/
-    setup.js                  # Vitest setup (e.g. jest-dom matchers)
-
-public/
-  portraits/                  # WebP portraits, one per hero, named <id>.webp
-
-scripts/
-  fetch-heroes.mjs            # Build-time Superhero API fetcher + WebP pipeline
-```

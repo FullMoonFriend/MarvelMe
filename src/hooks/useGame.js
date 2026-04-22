@@ -6,7 +6,7 @@
  * render — there is no loading phase and no runtime API dependency.
  *
  * Phase lifecycle:
- *   welcome → playing → revealed → (playing → revealed) × N → gameover
+ *   welcome → playing → revealing → revealed → (playing → revealing → revealed) × N → gameover
  */
 
 import { useState, useCallback, useRef } from 'react'
@@ -21,7 +21,7 @@ export const ROUNDS = 10
  *
  * @type {number[]}
  */
-const POINTS = [3, 2, 1, 0]
+export const POINTS = [3, 2, 1, 0]
 
 const HEROES = heroesData
 
@@ -98,7 +98,7 @@ function buildRound(pool, correctIndex) {
  */
 export function useGame() {
   const [state, setState] = useState({
-    phase: 'welcome', // 'welcome' | 'playing' | 'revealed' | 'gameover'
+    phase: 'welcome', // 'welcome' | 'playing' | 'revealing' | 'revealed' | 'gameover'
     round: 0,
     score: 0,
     currentHero: null,
@@ -161,13 +161,20 @@ export function useGame() {
       const newStreak = correct ? s.streak + 1 : 0
       return {
         ...s,
-        phase: 'revealed',
+        phase: 'revealing',
         result: correct ? 'correct' : 'wrong',
         score: s.score + (correct ? POINTS[s.hintsUsed] : 0),
         streak: newStreak,
         maxStreak: Math.max(s.maxStreak, newStreak),
         history: [...s.history, { correct, hintsUsed: s.hintsUsed }],
       }
+    })
+  }, [])
+
+  const completeReveal = useCallback(() => {
+    setState(s => {
+      if (s.phase !== 'revealing') return s
+      return { ...s, phase: 'revealed' }
     })
   }, [])
 
@@ -220,6 +227,7 @@ export function useGame() {
     startGame,
     useHint,
     submitAnswer,
+    completeReveal,
     nextRound,
     restartGame,
     ROUNDS,

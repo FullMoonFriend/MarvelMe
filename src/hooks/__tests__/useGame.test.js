@@ -88,7 +88,7 @@ describe('useGame', () => {
 
     act(() => result.current.submitAnswer(correctName))
 
-    expect(result.current.phase).toBe('revealed')
+    expect(result.current.phase).toBe('revealing')
     expect(result.current.result).toBe('correct')
     expect(result.current.score).toBe(3) // 0 hints = 3 pts
     expect(result.current.streak).toBe(1)
@@ -105,7 +105,7 @@ describe('useGame', () => {
 
     act(() => result.current.submitAnswer('DEFINITELY_NOT_A_HERO'))
 
-    expect(result.current.phase).toBe('revealed')
+    expect(result.current.phase).toBe('revealing')
     expect(result.current.result).toBe('wrong')
     expect(result.current.score).toBe(0)
     expect(result.current.streak).toBe(0)
@@ -145,6 +145,7 @@ describe('useGame', () => {
 
     const correctName = result.current.currentHero.name
     act(() => result.current.submitAnswer(correctName))
+    act(() => result.current.completeReveal())
 
     await act(async () => {
       await result.current.nextRound(result.current.round, result.current.score)
@@ -193,6 +194,7 @@ describe('useGame', () => {
     let correctName = result.current.currentHero.name
     act(() => result.current.submitAnswer(correctName))
     expect(result.current.streak).toBe(1)
+    act(() => result.current.completeReveal())
 
     await act(async () => {
       await result.current.nextRound(1, result.current.score)
@@ -203,6 +205,7 @@ describe('useGame', () => {
     act(() => result.current.submitAnswer(correctName))
     expect(result.current.streak).toBe(2)
     expect(result.current.maxStreak).toBe(2)
+    act(() => result.current.completeReveal())
 
     await act(async () => {
       await result.current.nextRound(2, result.current.score)
@@ -245,5 +248,29 @@ describe('useGame', () => {
 
     expect(run1.current.currentHero.name).toBe(run2.current.currentHero.name)
     expect(run1.current.isDailyChallenge).toBe(true)
+  })
+
+  it('submitAnswer transitions to revealing phase first', async () => {
+    const { result } = renderHook(() => useGame())
+    await act(async () => { await result.current.startGame(null) })
+    const correctName = result.current.currentHero.name
+    act(() => result.current.submitAnswer(correctName))
+    expect(result.current.phase).toBe('revealing')
+    expect(result.current.result).toBe('correct')
+  })
+
+  it('completeReveal transitions from revealing to revealed', async () => {
+    const { result } = renderHook(() => useGame())
+    await act(async () => { await result.current.startGame(null) })
+    act(() => result.current.submitAnswer(result.current.currentHero.name))
+    expect(result.current.phase).toBe('revealing')
+    act(() => result.current.completeReveal())
+    expect(result.current.phase).toBe('revealed')
+  })
+
+  it('completeReveal is a no-op outside revealing phase', async () => {
+    const { result } = renderHook(() => useGame())
+    act(() => result.current.completeReveal())
+    expect(result.current.phase).toBe('welcome')
   })
 })

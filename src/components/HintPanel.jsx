@@ -1,3 +1,5 @@
+import DecryptText from './DecryptText'
+
 /**
  * Displays a single power-stat row with a labelled progress bar.
  *
@@ -67,11 +69,11 @@ export default function HintPanel({ hero, hintsUsed }) {
           <p className="text-[#f5c518] font-bangers text-xs tracking-wider mb-1">HINT 1 — OCCUPATION</p>
           <p className="text-xs text-gray-300">
             <span className="text-gray-500">Occupation: </span>
-            <span className="text-white">{work.occupation || '—'}</span>
+            <DecryptText text={work.occupation || '—'} className="text-white" />
           </p>
           <p className="text-xs text-gray-300 mt-0.5">
             <span className="text-gray-500">Base: </span>
-            <span className="text-white">{work.base || '—'}</span>
+            <DecryptText text={work.base || '—'} className="text-white" />
           </p>
         </div>
       )}
@@ -81,15 +83,15 @@ export default function HintPanel({ hero, hintsUsed }) {
         <div className="pt-2 border-t border-[#2a2a2a] animate-fadeIn">
           <p className="text-[#f5c518] font-bangers text-xs tracking-wider mb-1">HINT 2 — APPEARANCE</p>
           <p className="text-xs text-gray-300">
-            {[
-              appearance.height?.[0],
-              appearance['hair-color'],
-              appearance['eye-color'],
-              appearance.race,
-              appearance.gender,
-            ]
-              .filter(v => v && v !== 'null' && v !== '-')
-              .join(' · ') || '—'}
+            <DecryptText
+              text={[
+                appearance.height?.[0],
+                appearance['hair-color'],
+                appearance['eye-color'],
+                appearance.race,
+                appearance.gender,
+              ].filter(v => v && v !== 'null' && v !== '-').join(' · ') || '—'}
+            />
           </p>
         </div>
       )}
@@ -99,7 +101,7 @@ export default function HintPanel({ hero, hintsUsed }) {
         <div className="pt-2 border-t border-[#ed1d24]/40 animate-fadeIn">
           <p className="text-[#f5c518] font-bangers text-xs tracking-wider mb-1">HINT 3 — REAL NAME</p>
           <p className="text-white text-base font-semibold">
-            {bio['full-name'] || bio['alter-egos'] || '—'}
+            <DecryptText text={bio['full-name'] || bio['alter-egos'] || '—'} duration={500} />
           </p>
         </div>
       )}
